@@ -1,13 +1,20 @@
 {
   "baseUrl": "http://localhost:3000",
   "devCommand": "npx next dev -p 3000",
-  "rules": "kane/rules.md",
+  "rulePacks": {
+    "india-gst": "kane/rules/india-gst.md",
+    "us-sales-tax": "kane/rules/us-sales-tax.md"
+  },
   "flows": "kane/flows",
   "invoices": [
-    "/invoice/sample/intra-state",
-    "/invoice/sample/inter-state",
-    "/invoice/sample/union-territory",
-    "/invoice/sample/unregistered-buyer"
+    { "path": "/invoice/sample/intra-state", "pack": "india-gst" },
+    { "path": "/invoice/sample/inter-state", "pack": "india-gst" },
+    { "path": "/invoice/sample/union-territory", "pack": "india-gst" },
+    { "path": "/invoice/sample/unregistered-buyer", "pack": "india-gst" },
+    { "path": "/invoice/sample/us-taxable-goods", "pack": "us-sales-tax" },
+    { "path": "/invoice/sample/us-no-nexus", "pack": "us-sales-tax" },
+    { "path": "/invoice/sample/us-exempt-reseller", "pack": "us-sales-tax" },
+    { "path": "/invoice/sample/us-no-sales-tax-state", "pack": "us-sales-tax" }
   ],
   "watch": ["app", "lib", "components"],
   "concurrency": 5,

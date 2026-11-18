@@ -1,4 +1,4 @@
-# GST invoice rules
+# India: GST invoice rules
 
 Plain-English rules every invoice must pass before it can be issued. Kane CLI
 reads the invoice in a real browser and checks each one. They follow the
