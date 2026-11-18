@@ -84,7 +84,7 @@ button.ghost { background: transparent; color: var(--ink); border-color: var(--l
   padding: 32px; max-width: 900px; overflow-x: auto;
 }
 .inv-head { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; border-bottom: 2px solid var(--ink); padding-bottom: 16px; }
-.inv-head h1 { margin: 0; font-size: 26px; letter-spacing: 0.02em; text-transform: uppercase; }
+.inv-head h1 { margin: 0; font-size: 26px; letter-spacing: 0.01em; }
 .meta { display: grid; grid-template-columns: auto auto; gap: 2px 16px; margin: 0; font-size: 14px; }
 .meta dt { color: var(--muted); }
 .meta dd { margin: 0; font-weight: 600; }
