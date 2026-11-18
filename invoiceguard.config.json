@@ -1,0 +1,16 @@
+{
+  "baseUrl": "http://localhost:3000",
+  "devCommand": "npx next dev -p 3000",
+  "rules": "kane/rules.md",
+  "flows": "kane/flows",
+  "invoices": [
+    "/invoice/sample/intra-state",
+    "/invoice/sample/inter-state",
+    "/invoice/sample/union-territory",
+    "/invoice/sample/unregistered-buyer"
+  ],
+  "watch": ["app", "lib", "components"],
+  "concurrency": 5,
+  "timeoutSeconds": 300,
+  "maxHookAttempts": 3
+}
