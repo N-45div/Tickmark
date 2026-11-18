@@ -5,7 +5,7 @@ reads the invoice in a real browser and checks each one. They follow the
 mandatory contents of a tax invoice under India's CGST Rules, rule 46.
 Edit, add or remove rules freely. Each numbered line is checked.
 
-1. The document is titled "Tax Invoice" (capitalisation does not matter).
+1. The main heading of the document reads "Tax Invoice".
 2. The supplier's name, address and GSTIN are shown.
 3. An invoice number is shown. It is at most 16 characters long and uses only letters, digits, "/" and "-".
 4. An invoice date and a due date are shown.

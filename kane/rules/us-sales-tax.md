@@ -6,7 +6,7 @@ state and is only collected where the seller has nexus, and many services are no
 taxable. These rules cover the decisions a small business has to get right.
 Edit, add or remove rules freely. Each numbered line is checked.
 
-1. The document is titled "Invoice" (capitalisation does not matter) and states that amounts are in US dollars.
+1. The main heading of the document reads "Invoice", and the document states that amounts are in US dollars (USD).
 2. The seller ("From") name and address are shown, and the customer ("Bill to") name, address and state are shown.
 3. An invoice number, an issue date and a due date are shown, and the due date is not earlier than the issue date.
 4. Every line item shows a description, quantity, rate and amount, and each amount equals quantity times rate to within $0.01.
