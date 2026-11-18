@@ -102,7 +102,11 @@ async function reachable(url) {
 }
 
 async function ensureServer(cfg) {
-  if (await reachable(cfg.baseUrl)) return;
+  if (await reachable(cfg.baseUrl)) {
+    // Not ours: make it visible, a stale production build would be verified instead of your edits.
+    log(dim(`Using the app already running at ${cfg.baseUrl} (make sure it serves your latest code, e.g. \`npm run dev\`)`));
+    return;
+  }
   log(dim(`Starting app: ${cfg.devCommand}`));
   fs.mkdirSync(STATE_DIR, { recursive: true });
   const out = fs.openSync(path.join(STATE_DIR, "dev-server.log"), "a");
@@ -172,18 +176,20 @@ async function launchChrome(slot) {
 function invoiceObjective(rules) {
   return [
     "This page is an Indian GST tax invoice. Read the whole invoice carefully.",
-    "Check it against every rule below and verify each rule holds. A violated rule is a product bug: name the rule number.",
+    "Check it against every rule below and verify that each rule holds.",
+    "If every rule holds, the check passes. If any rule is violated, that is a product bug: fail and name the rule number(s) and what the page shows.",
     "",
     ...rules,
   ].join("\n");
 }
 
 /** Run one Kane objective; resolves with a normalised result. */
-function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint }) {
+function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint, allFailures, logName }) {
   const args = ["run", objective, "--agent", "--timeout", String(timeoutSeconds)];
   args.push(...(cdpEndpoint ? ["--cdp-endpoint", cdpEndpoint] : ["--headless"]));
   if (url) args.push("--url", url);
   if (visual) args.push("--assertion-mode", "visual");
+  if (allFailures) args.push("--assertion-failure-mode", "continue"); // report every broken rule, not just the first
   if (process.env.LT_USERNAME && process.env.LT_ACCESS_KEY)
     args.push("--username", process.env.LT_USERNAME, "--access-key", process.env.LT_ACCESS_KEY);
 
@@ -194,8 +200,11 @@ function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint }) {
       env: { ...process.env, KANE_CLI_USER_AGENT: "invoiceguard" },
     });
     let buf = "", runEnd = null, lastError = null, stderr = "";
+    fs.mkdirSync(path.join(STATE_DIR, "runs"), { recursive: true });
+    const raw = fs.createWriteStream(path.join(STATE_DIR, "runs", `${(logName ?? "run").replace(/[^\w.-]+/g, "_")}.ndjson`));
     const steps = [];
     child.stdout.on("data", (d) => {
+      raw.write(d);
       buf += d;
       let i;
       while ((i = buf.indexOf("\n")) >= 0) {
@@ -209,6 +218,7 @@ function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint }) {
     child.stderr.on("data", (d) => { stderr += d; });
     child.on("error", (err) => resolve({ status: "error", reason: `could not start kane-cli: ${err.message}` }));
     child.on("close", (code) => {
+      raw.end();
       const seconds = Math.round((Date.now() - started) / 1000);
       if (!runEnd) {
         const reason = code === 3 ? "Kane run timed out" : lastError || stderr.trim().split("\n").pop() || `kane-cli exited ${code}`;
@@ -230,7 +240,7 @@ function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint }) {
         reasonCode: runEnd.reason_code,
         confidence: v.confidence,
         evidence: (v.signals ?? []).map((s) => s.excerpt).filter(Boolean),
-        failedSteps: steps.filter((s) => s.status === "failed").map((s) => s.remark),
+        failedSteps: steps.filter((s) => s.status === "failed" && !/^wait:/.test(s.remark ?? "")).map((s) => s.remark),
         testUrl: runEnd.test_url,
         credits: runEnd.credits_consumed ?? runEnd.credits,
       });
@@ -274,6 +284,7 @@ function printResult(check, r) {
   if (r.bugTitle) log(`    ${red(r.bugTitle)}`);
   const why = r.rootCause || r.oneLiner || r.reason;
   if (why) log(`    ${why}`);
+  for (const f of r.failedSteps ?? []) log(red(`    • ${f.replace(/^assert:\s*/, "")}`));
   if (r.suggestion) log(dim(`    fix: ${r.suggestion}`));
   if (r.testUrl) log(dim(`    ${r.testUrl}`));
 }
@@ -328,7 +339,7 @@ async function gate(opts = {}) {
   const srcHash = sourceHash(cfg);
   for (const ch of checks) {
     ch.key = ch.kind === "invoice"
-      ? sha(ch.id, rules.join("\n"), await renderedInvoice(ch.url))
+      ? sha(ch.id, invoiceObjective(rules), await renderedInvoice(ch.url))
       : sha(ch.id, ch.raw, srcHash);
   }
 
@@ -340,8 +351,8 @@ async function gate(opts = {}) {
     if (cache[ch.id] === ch.key) r = { status: "passed", cached: true };
     else {
       r = ch.kind === "invoice"
-        ? await verify({ objective: invoiceObjective(rules), url: ch.url, timeoutSeconds: cfg.timeoutSeconds }, slot)
-        : await verify({ objective: ch.objective, url: `${base}/`, timeoutSeconds: cfg.timeoutSeconds }, slot);
+        ? await verify({ objective: invoiceObjective(rules), url: ch.url, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot)
+        : await verify({ objective: ch.objective, url: `${base}/`, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot);
       if (r.status === "passed") cache[ch.id] = ch.key; else delete cache[ch.id];
       writeJson(cacheFile, cache);
     }
@@ -357,6 +368,10 @@ async function gate(opts = {}) {
     results,
   };
   writeReport(summary);
+  if (summary.passed && !opts.only) {
+    const hookFile = path.join(STATE_DIR, "hook.json");
+    writeJson(hookFile, { ...readJson(hookFile, {}), lastGreen: srcHash, attempts: 0 });
+  }
   log(summary.passed
     ? green(bold(`\nAll ${results.length} checks passed.`)) + dim(" Report: .kane/report.md")
     : red(bold(`\n${results.filter((x) => x.result.status !== "passed").length} of ${results.length} checks failed.`)) + dim(" Report: .kane/report.md"));
@@ -379,7 +394,7 @@ async function audit(target, opts = {}) {
   const visual = /\.pdf($|\?)/i.test(target);
   log(bold(`\nInvoiceGuard audit`) + dim(`  ${target} · ${rules.length} rules${visual ? " · visual mode (PDF)" : ""}`));
   const check = { id: "audit", title: `Audit of ${path.basename(target)}`, url };
-  const r = await verify({ objective: invoiceObjective(rules), url, timeoutSeconds: cfg.timeoutSeconds, visual }, 0);
+  const r = await verify({ objective: invoiceObjective(rules), url, timeoutSeconds: cfg.timeoutSeconds, visual, allFailures: true, logName: "audit" }, 0);
   server?.close();
   printResult(check, r);
   writeJson(path.join(STATE_DIR, "audit.json"), { target, at: new Date().toISOString(), result: r });
@@ -399,7 +414,13 @@ async function hook() {
   const state = readJson(stateFile, { lastGreen: null, attempts: 0 });
   const src = sourceHash(cfg);
 
-  if (state.lastGreen === src) return; // nothing changed since Kane last signed off
+  if (state.lastGreen === src) { // nothing changed since Kane last signed off
+    if (state.attempts) {
+      writeJson(stateFile, { ...state, attempts: 0 });
+      console.log(JSON.stringify({ systemMessage: "✓ Code matches the version Kane CLI last verified. All checks green." }));
+    }
+    return;
+  }
   if (!input.stop_hook_active) state.attempts = 0; // a fresh user request
 
   let summary;
@@ -410,7 +431,6 @@ async function hook() {
   }
 
   if (summary.passed) {
-    writeJson(stateFile, { lastGreen: src, attempts: 0 });
     console.log(JSON.stringify({ systemMessage: `✓ Kane CLI verified ${summary.results.length} invoice checks in a real browser.` }));
     return;
   }
