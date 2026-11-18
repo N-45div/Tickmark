@@ -1,0 +1,40 @@
+name: InvoiceGuard (Kane CLI)
+
+# Every push and PR: unit tests, then Kane CLI opens each sample invoice in a
+# real Chrome and checks it against kane/rules.md. A wrong invoice fails the build.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm install -g @testmuai/kane-cli
+      - name: Start the app
+        run: npx next start -p 3000 &
+      - name: Kane gate
+        env:
+          LT_USERNAME: ${{ secrets.LT_USERNAME }}
+          LT_ACCESS_KEY: ${{ secrets.LT_ACCESS_KEY }}
+        run: node cli/invoiceguard.mjs gate --no-cache
+      - name: Kane report
+        if: always()
+        run: cat .kane/report.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: invoiceguard-report
+          path: .kane/
+          include-hidden-files: true
