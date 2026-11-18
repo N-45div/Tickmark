@@ -1,0 +1,30 @@
+{
+  "name": "invoiceguard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GST invoices that can't go out wrong — every change verified in a real browser by Kane CLI.",
+  "bin": {
+    "invoiceguard": "./cli/invoiceguard.mjs"
+  },
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "test": "vitest run",
+    "gate": "node cli/invoiceguard.mjs gate",
+    "audit": "node cli/invoiceguard.mjs audit"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

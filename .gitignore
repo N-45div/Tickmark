@@ -1,0 +1,8 @@
+node_modules
+.next
+out
+.env*
+.kane/
+.testmuai/
+*.tsbuildinfo
+next-env.d.ts
