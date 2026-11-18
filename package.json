@@ -2,7 +2,7 @@
   "name": "invoiceguard",
   "version": "0.1.0",
   "private": true,
-  "description": "GST invoices that can't go out wrong — every change verified in a real browser by Kane CLI.",
+  "description": "Invoices that can't go out wrong (India GST, US sales tax), verified in a real browser by Kane CLI.",
   "bin": {
     "invoiceguard": "./cli/invoiceguard.mjs"
   },
