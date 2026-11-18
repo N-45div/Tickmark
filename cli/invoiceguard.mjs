@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// invoiceguard — verify GST invoices in a real browser with Kane CLI.
+// invoiceguard — verify invoices (India GST, US sales tax) in a real browser with Kane CLI.
 //
 //   invoiceguard gate            check every sample invoice + user flow of this app
-//   invoiceguard audit <url|file> check any invoice page (yours or a vendor's)
+//   invoiceguard audit <url|file> check any invoice page (yours or a vendor's);
+//                                 picks the India GST or US sales tax rulebook automatically
 //   invoiceguard hook            Claude Code Stop hook: block "done" until Kane passes
 //   invoiceguard init            install the hook + rules into the current project
 //
@@ -33,7 +34,7 @@ function loadConfig() {
   const defaults = {
     baseUrl: "http://localhost:3000",
     devCommand: "npm run dev",
-    rules: "kane/rules.md",
+    rulePacks: { "india-gst": "kane/rules/india-gst.md", "us-sales-tax": "kane/rules/us-sales-tax.md" },
     flows: "kane/flows",
     invoices: [],
     watch: ["app", "lib", "components", "src"],
@@ -41,8 +42,11 @@ function loadConfig() {
     timeoutSeconds: 300,
     maxHookAttempts: 3,
   };
-  if (!fs.existsSync(file)) return defaults;
-  return { ...defaults, ...JSON.parse(fs.readFileSync(file, "utf8")) };
+  const cfg = fs.existsSync(file) ? { ...defaults, ...JSON.parse(fs.readFileSync(file, "utf8")) } : defaults;
+  if (cfg.rules) cfg.rulePacks = { default: cfg.rules, ...cfg.rulePacks }; // legacy single-rulebook config
+  cfg.invoices = cfg.invoices.map((inv) => typeof inv === "string"
+    ? { path: inv, pack: cfg.rules ? "default" : Object.keys(cfg.rulePacks)[0] } : inv);
+  return cfg;
 }
 
 const sha = (...parts) => createHash("sha256").update(parts.join("\u0000")).digest("hex").slice(0, 16);
@@ -55,14 +59,29 @@ function writeJson(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-/** Rules file → numbered rule lines (ignores headings and prose). */
-function loadRules(cfg, override) {
-  const file = path.resolve(ROOT, override ?? cfg.rules);
-  const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8")
-    : fs.readFileSync(path.join(PKG_DIR, "kane", "rules.md"), "utf8");
+/** Rulebook file → { title, rules } (numbered lines only; headings and prose are ignored). */
+function loadRulebook(file) {
+  const local = path.resolve(ROOT, file);
+  const bundled = path.join(PKG_DIR, file);
+  const src = fs.existsSync(local) ? local : bundled;
+  if (!fs.existsSync(src)) throw new Error(`Rulebook not found: ${file}`);
+  const text = fs.readFileSync(src, "utf8");
   const rules = text.split("\n").filter((l) => /^\s*\d+\.\s+/.test(l)).map((l) => l.trim());
   if (!rules.length) throw new Error(`No numbered rules found in ${file}`);
-  return rules;
+  return { title: (text.match(/^#\s+(.+)$/m)?.[1] ?? path.basename(file)).trim(), rules, file };
+}
+
+function loadPack(cfg, name) {
+  const file = cfg.rulePacks[name];
+  if (!file) throw new Error(`Unknown rule pack "${name}". Known: ${Object.keys(cfg.rulePacks).join(", ")}`);
+  return { name, ...loadRulebook(file) };
+}
+
+/** Guess which rulebook an invoice needs from its text. */
+function detectPack(text) {
+  if (/GSTIN|₹|\b(IGST|CGST|SGST|HSN|SAC)\b/.test(text)) return "india-gst";
+  if (/\$\s?\d|\bUSD\b|sales tax/i.test(text)) return "us-sales-tax";
+  return null;
 }
 
 /** Flow files → { id, title, objective } with {{baseUrl}} filled in. */
@@ -90,7 +109,7 @@ function sourceHash(cfg) {
     }
   };
   for (const d of cfg.watch) walk(path.join(ROOT, d));
-  for (const f of [cfg.rules]) if (fs.existsSync(path.join(ROOT, f))) h.update(fs.readFileSync(path.join(ROOT, f)));
+  for (const f of Object.values(cfg.rulePacks)) if (fs.existsSync(path.join(ROOT, f))) h.update(fs.readFileSync(path.join(ROOT, f)));
   walk(path.join(ROOT, cfg.flows));
   return h.digest("hex").slice(0, 16);
 }
@@ -173,13 +192,13 @@ async function launchChrome(slot) {
 
 // ------------------------------------------------------------------ kane
 
-function invoiceObjective(rules) {
+function invoiceObjective(pack) {
   return [
-    "This page is an Indian GST tax invoice. Read the whole invoice carefully.",
+    `This page is an invoice that must follow the rulebook "${pack.title}". Read the whole invoice carefully.`,
     "Check it against every rule below and verify that each rule holds.",
     "If every rule holds, the check passes. If any rule is violated, that is a product bug: fail and name the rule number(s) and what the page shows.",
     "",
-    ...rules,
+    ...pack.rules,
   ].join("\n");
 }
 
@@ -324,12 +343,15 @@ function writeReport(summary) {
 
 async function gate(opts = {}) {
   const cfg = loadConfig();
-  const rules = loadRules(cfg);
+  const packs = Object.fromEntries([...new Set(cfg.invoices.map((i) => i.pack))].map((n) => [n, loadPack(cfg, n)]));
   await ensureServer(cfg);
 
   const base = cfg.baseUrl.replace(/\/$/, "");
   let checks = [
-    ...cfg.invoices.map((p) => ({ id: `invoice:${p}`, title: `Invoice ${p.split("/").pop()} follows all ${rules.length} GST rules`, url: base + p, kind: "invoice" })),
+    ...cfg.invoices.map((inv) => {
+      const pack = packs[inv.pack];
+      return { id: `invoice:${inv.path}`, title: `Invoice ${inv.path.split("/").pop()} follows all ${pack.rules.length} ${pack.name} rules`, url: base + inv.path, kind: "invoice", pack };
+    }),
     ...loadFlows(cfg).map((f) => ({ ...f, kind: "flow" })),
   ];
   if (opts.only) checks = checks.filter((ch) => ch.id.includes(opts.only));
@@ -339,7 +361,7 @@ async function gate(opts = {}) {
   const srcHash = sourceHash(cfg);
   for (const ch of checks) {
     ch.key = ch.kind === "invoice"
-      ? sha(ch.id, invoiceObjective(rules), await renderedInvoice(ch.url))
+      ? sha(ch.id, invoiceObjective(ch.pack), await renderedInvoice(ch.url))
       : sha(ch.id, ch.raw, srcHash);
   }
 
@@ -351,7 +373,7 @@ async function gate(opts = {}) {
     if (cache[ch.id] === ch.key) r = { status: "passed", cached: true };
     else {
       r = ch.kind === "invoice"
-        ? await verify({ objective: invoiceObjective(rules), url: ch.url, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot)
+        ? await verify({ objective: invoiceObjective(ch.pack), url: ch.url, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot)
         : await verify({ objective: ch.objective, url: `${base}/`, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot);
       if (r.status === "passed") cache[ch.id] = ch.key; else delete cache[ch.id];
       writeJson(cacheFile, cache);
@@ -379,9 +401,21 @@ async function gate(opts = {}) {
 }
 
 async function audit(target, opts = {}) {
-  if (!target) throw new Error("usage: invoiceguard audit <url | file.html | file.pdf> [--rules rules.md]");
+  if (!target) throw new Error("usage: invoiceguard audit <url | file.html | file.pdf> [--pack india-gst|us-sales-tax | --rules file.md]");
   const cfg = loadConfig();
-  const rules = loadRules(cfg, opts.rules);
+  let pack;
+  if (opts.rules) pack = { name: path.basename(opts.rules, ".md"), ...loadRulebook(opts.rules) };
+  else {
+    let name = opts.pack;
+    if (!name) {
+      const text = /^https?:\/\//.test(target)
+        ? await fetch(target).then((r) => r.text()).catch(() => "")
+        : /\.pdf$/i.test(target) ? "" : fs.readFileSync(path.resolve(target), "utf8");
+      name = detectPack(text);
+      if (!name) throw new Error("Could not tell which country this invoice is from. Pass --pack india-gst or --pack us-sales-tax.");
+    }
+    pack = loadPack(cfg, name);
+  }
   let url = target, server;
   if (!/^https?:\/\//.test(target)) {
     const file = path.resolve(target);
@@ -392,9 +426,9 @@ async function audit(target, opts = {}) {
     url = `http://127.0.0.1:${server.address().port}/${path.basename(file)}`;
   }
   const visual = /\.pdf($|\?)/i.test(target);
-  log(bold(`\nInvoiceGuard audit`) + dim(`  ${target} · ${rules.length} rules${visual ? " · visual mode (PDF)" : ""}`));
+  log(bold(`\nInvoiceGuard audit`) + dim(`  ${target} · ${pack.title} (${pack.rules.length} rules)${visual ? " · visual mode (PDF)" : ""}`));
   const check = { id: "audit", title: `Audit of ${path.basename(target)}`, url };
-  const r = await verify({ objective: invoiceObjective(rules), url, timeoutSeconds: cfg.timeoutSeconds, visual, allFailures: true, logName: "audit" }, 0);
+  const r = await verify({ objective: invoiceObjective(pack), url, timeoutSeconds: cfg.timeoutSeconds, visual, allFailures: true, logName: "audit" }, 0);
   server?.close();
   printResult(check, r);
   writeJson(path.join(STATE_DIR, "audit.json"), { target, at: new Date().toISOString(), result: r });
@@ -449,7 +483,7 @@ async function hook() {
     decision: "block",
     reason: [
       `InvoiceGuard: Kane CLI opened the app in a real browser and ${failures.length} check(s) failed. You are not done yet.`,
-      "Fix the application code so these invoices are correct (do not weaken kane/rules.md or the flows), then finish again — Kane will re-verify automatically.",
+      "Fix the application code so these invoices are correct (do not weaken the rulebooks in kane/rules/ or the flows), then finish again — Kane will re-verify automatically.",
       `Attempt ${state.attempts} of ${cfg.maxHookAttempts}.`,
       "",
       failureReport(failures),
@@ -466,12 +500,12 @@ function init() {
   const already = JSON.stringify(settings.hooks.Stop).includes("invoiceguard");
   if (!already) settings.hooks.Stop.push({ hooks: [{ type: "command", command, timeout: 1200 }] });
   writeJson(settingsFile, settings);
-  for (const f of ["kane/rules.md"]) {
+  for (const f of ["kane/rules/india-gst.md", "kane/rules/us-sales-tax.md"]) {
     const dest = path.join(ROOT, f);
     if (!fs.existsSync(dest)) { fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.copyFileSync(path.join(PKG_DIR, f), dest); }
   }
   log(green("✓ ") + (already ? "Stop hook already installed" : "Installed Claude Code Stop hook") + dim(" (.claude/settings.json)"));
-  log(green("✓ ") + "GST rules at kane/rules.md — edit them in plain English");
+  log(green("✓ ") + "Rulebooks in kane/rules/ (India GST, US sales tax). Edit them in plain English");
   log(dim("Next: list your invoice pages in invoiceguard.config.json, then `invoiceguard gate`."));
 }
 
@@ -486,7 +520,7 @@ try {
     if (rest.includes("--json")) console.log(JSON.stringify(s, null, 2));
     process.exit(s.passed ? 0 : 1);
   } else if (cmd === "audit") {
-    const r = await audit(rest.find((a) => !a.startsWith("--") && a !== flag("--rules")), { rules: flag("--rules") });
+    const r = await audit(rest.find((a) => !a.startsWith("--") && a !== flag("--rules") && a !== flag("--pack")), { rules: flag("--rules"), pack: flag("--pack") });
     if (rest.includes("--json")) console.log(JSON.stringify(r, null, 2));
     process.exit(r.status === "passed" ? 0 : 1);
   } else if (cmd === "hook") {
@@ -495,10 +529,10 @@ try {
   } else if (cmd === "init") {
     init();
   } else {
-    log(`invoiceguard — GST invoices verified by Kane CLI
+    log(`invoiceguard — invoices (India GST, US sales tax) verified by Kane CLI
 
   gate [--only <id>] [--no-cache] [--json]   verify this app's invoices and flows
-  audit <url|file> [--rules file] [--json]   audit any invoice page or PDF
+  audit <url|file> [--pack name] [--json]    audit any invoice page or PDF (India GST / US sales tax, auto-detected)
   hook                                       Claude Code Stop hook (reads stdin)
   init                                       install the hook and rules here`);
     process.exit(cmd ? 2 : 0);
