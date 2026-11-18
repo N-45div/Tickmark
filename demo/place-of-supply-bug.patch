@@ -1,0 +1,12 @@
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -39,7 +39,8 @@
+   useEffect(() => setStore(loadStore()), []);
+ 
+   const supplier = store?.supplier ?? SUPPLIER;
+-  const placeOfSupplyCode = posOverride || recipient.stateCode;
++  // Default the place of supply to our own registered state
++  const placeOfSupplyCode = posOverride || supplier.stateCode;
+   const draftNumber = invoiceNumber(date, (store?.seq ?? 0) + 1);
+ 
+   const input: InvoiceInput = {
