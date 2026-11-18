@@ -1,5 +1,5 @@
---- a/app/page.tsx
-+++ b/app/page.tsx
+--- a/components/IndiaEditor.tsx
++++ b/components/IndiaEditor.tsx
 @@ -39,7 +39,8 @@
    useEffect(() => setStore(loadStore()), []);
  

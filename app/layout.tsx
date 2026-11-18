@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "InvoiceGuard",
-  description: "GST invoices that can't go out wrong, verified in a real browser by Kane CLI.",
+  description: "Invoices that can't go out wrong (India GST, US sales tax), verified in a real browser by Kane CLI.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

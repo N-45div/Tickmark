@@ -112,3 +112,13 @@ button.ghost { background: transparent; color: var(--ink); border-color: var(--l
   .editor { display: block; }
   .invoice { border: none; padding: 0; }
 }
+
+.exempt { margin-top: 8px; font-size: 13px; font-weight: 600; color: #1f6f50; }
+.country-switch { display: flex; gap: 6px; margin-bottom: 14px; }
+.country-switch button { flex: 1; }
+.country-switch button[aria-pressed="false"] { background: transparent; color: var(--ink); border-color: var(--line); font-weight: 500; }
+.check { flex-direction: row !important; align-items: center; gap: 6px !important; color: var(--ink) !important; margin: 0 !important; }
+.hint { font-size: 12px; color: var(--muted); margin: -6px 0 10px; }
+.item-row.us-row { grid-template-columns: 0.8fr 0.7fr 1.3fr auto 34px; }
+.country-switch button { white-space: nowrap; font-size: 14px; }
+@media (max-width: 420px) { .country-switch { flex-direction: column; } }
