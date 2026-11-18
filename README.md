@@ -4,7 +4,8 @@
 in **India (GST)** and the **United States (sales tax)**. The tax rules live in plain-English rulebooks,
 and [Kane CLI](https://github.com/LambdaTest/kane-cli) checks them in a real Chrome browser on every
 change. When Kane finds a broken rule, the bug report goes back to the coding agent, which has to fix it
-before it's allowed to say "done". Kane can also audit invoices *you receive*.
+before it's allowed to say "done". Kane can also audit invoices and **contracts** *you receive*, and check
+that an invoice bills what the contract agreed, from any AI agent via **MCP**.
 
 > Built for the [KaneCLI Hackathon](https://www.kaneclihack.sh/) · agent: Claude Code · verifier: Kane CLI
 
@@ -37,6 +38,8 @@ Over-collecting annoys customers. Under-collecting becomes your own liability at
 | **`invoiceguard gate`** | Kane opens every sample invoice and flow in an isolated headless Chrome (in parallel) and checks them. |
 | **`invoiceguard hook`** | Claude Code **Stop hook**. If the app changed, Kane re-verifies; failures come back to Claude as a block with Kane's bug title, root cause, evidence and suggested fix. |
 | **`invoiceguard audit <url\|file>`** | Audit *any* invoice you receive, from a link or an HTML file. It works out whether the invoice is Indian or American and uses the matching rulebook. |
+| **MCP server** (`mcp/server.mjs`) | Any MCP agent (Claude Code, Claude Desktop, Cursor, Windsurf, Codex) can call `check_document`, `check_invoice_against_contract`, `list_rulebooks` and `verify_project`. Kane's verdict comes straight back to the agent. |
+| **Contract rulebooks** (`kane/rules/services-contract.md`, `invoice-vs-contract.md`) | 12 checks for missing or contradictory terms in a services agreement (fee in words vs figures, payment terms, termination, IP, governing law, signatures). 5 checks that an invoice bills what the contract says (client, rates, terms, dates, currency). |
 | **CI** (`.github/workflows/invoiceguard.yml`) | The same gate on every push and PR. |
 
 ## The closed loop
@@ -61,6 +64,43 @@ Over-collecting annoys customers. Under-collecting becomes your own liability at
 - **Can't loop forever.** After 3 failed fix attempts it stops and hands over to a human, with the
   report in `.kane/report.md`.
 
+## MCP server: use it from any agent
+
+The repo ships a project `.mcp.json`, so **Claude Code** picks the server up automatically when opened
+here. For other clients, add this to their MCP config (Claude Desktop: `claude_desktop_config.json`;
+Cursor: `.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "invoiceguard": {
+      "command": "node",
+      "args": ["/absolute/path/to/kanehack/mcp/server.mjs"],
+      "env": { "LT_USERNAME": "your-testmu-username", "LT_ACCESS_KEY": "your-testmu-access-key" }
+    }
+  }
+}
+```
+
+Then just ask the agent in plain words:
+
+- *"Check examples/contract-with-gaps.md before I sign it."* → `check_document`: 4 problems, including
+  the fee written as "Four Thousand Five Hundred" next to "$4,800" and the missing governing-law clause.
+- *"Does invoice-for-contract.html match contract-signed.md?"* → `check_invoice_against_contract`: billed
+  $165/hour vs the agreed $150, and Net 15 vs the agreed Net 30.
+- *"I changed the tax code, verify the app."* → `verify_project`: the same Kane gate as `npm run gate`.
+
+| Tool | Input | Returns |
+| --- | --- | --- |
+| `list_rulebooks` | none | every rulebook and rule |
+| `check_document` | one of `url` / `html` / `text` / `file`; optional `rulebook`, `extra_rules` | pass/fail, rules not met, evidence, suggested fix, Kane recording link |
+| `check_invoice_against_contract` | `invoice` and `contract` (each url/html/text/file) | the same, for the five invoice-vs-contract rules |
+| `verify_project` | optional `only`, `no_cache` | per-check results + Kane's bug report for failures |
+
+Each Kane run takes about 1–3 minutes, and the server sends progress notifications while it works.
+If your client times out long tool calls, raise its limit (Claude Code: `MCP_TOOL_TIMEOUT=600000`).
+`node scripts/mcp-smoke.mjs --kane` drives the server exactly like an agent would.
+
 ## Quick start
 
 ```bash
@@ -73,6 +113,7 @@ npm test                                # unit tests for the GST logic
 npm run gate                            # Kane verifies every sample invoice + flow
 npm run audit -- examples/india-vendor-invoice.html   # wrong GST type + GSTIN/state mismatch
 npm run audit -- examples/us-vendor-invoice.html      # taxed a non-taxable service + bad line math
+npm run audit -- examples/contract-with-gaps.md       # contract: words vs figures, no governing law, …
 ```
 
 To get the agent loop in Claude Code:
@@ -124,7 +165,8 @@ The gate starts your dev server if it isn't running. Reports go to `.kane/report
 
 ## Disclaimer
 
-The rulebooks cover common mandatory fields and tax decisions. They are not tax advice.
+The rulebooks cover common mandatory fields, tax decisions and contract terms. They are not tax or legal
+advice.
 
 - **India:** check with your CA for e-invoicing (IRN/QR), exports, SEZ supplies and reverse-charge cases.
 - **US:** state base rates are only a starting point. Enter your customer's combined state + local rate,
