@@ -16,10 +16,15 @@ import { createServer } from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = process.cwd();
-const STATE_DIR = path.join(ROOT, ".kane");
+// Where reports, caches and raw Kane logs go. Falls back to a temp dir when the
+// working directory is not writable (e.g. an MCP server launched from "/").
+const STATE_DIR = process.env.INVOICEGUARD_STATE_DIR ?? (() => {
+  try { fs.accessSync(ROOT, fs.constants.W_OK); return path.join(ROOT, ".kane"); }
+  catch { return path.join(os.tmpdir(), "invoiceguard"); }
+})();
 const PKG_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 const tty = process.stderr.isTTY;
@@ -34,7 +39,11 @@ function loadConfig() {
   const defaults = {
     baseUrl: "http://localhost:3000",
     devCommand: "npm run dev",
-    rulePacks: { "india-gst": "kane/rules/india-gst.md", "us-sales-tax": "kane/rules/us-sales-tax.md" },
+    rulePacks: {
+      "india-gst": "kane/rules/india-gst.md",
+      "us-sales-tax": "kane/rules/us-sales-tax.md",
+      "services-contract": "kane/rules/services-contract.md",
+    },
     flows: "kane/flows",
     invoices: [],
     watch: ["app", "lib", "components", "src"],
@@ -42,7 +51,8 @@ function loadConfig() {
     timeoutSeconds: 300,
     maxHookAttempts: 3,
   };
-  const cfg = fs.existsSync(file) ? { ...defaults, ...JSON.parse(fs.readFileSync(file, "utf8")) } : defaults;
+  const user = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+  const cfg = { ...defaults, ...user, rulePacks: { ...defaults.rulePacks, ...user.rulePacks } };
   if (cfg.rules) cfg.rulePacks = { default: cfg.rules, ...cfg.rulePacks }; // legacy single-rulebook config
   cfg.invoices = cfg.invoices.map((inv) => typeof inv === "string"
     ? { path: inv, pack: cfg.rules ? "default" : Object.keys(cfg.rulePacks)[0] } : inv);
@@ -77,8 +87,12 @@ function loadPack(cfg, name) {
   return { name, ...loadRulebook(file) };
 }
 
-/** Guess which rulebook an invoice needs from its text. */
+/** Guess which rulebook a document needs from its text. */
 function detectPack(text) {
+  // Go by what the document calls itself at the top (title + first lines).
+  const visible = text.replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ").replace(/<!--[\s\S]*?-->/g, " ").replace(/<[^>]+>/g, " ");
+  const head = visible.replace(/\s+/g, " ").trim().slice(0, 300);
+  if (/\b(agreement|contract)\b/i.test(head) && !/\binvoice\b/i.test(head)) return "services-contract";
   if (/GSTIN|₹|\b(IGST|CGST|SGST|HSN|SAC)\b/.test(text)) return "india-gst";
   if (/\$\s?\d|\bUSD\b|sales tax/i.test(text)) return "us-sales-tax";
   return null;
@@ -162,18 +176,23 @@ function chromePath() {
   return candidates.find((p) => fs.existsSync(p));
 }
 
-async function launchChrome(slot) {
+async function launchChrome() {
   const bin = chromePath();
   if (!bin) return null;
-  const port = 9301 + slot;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `invoiceguard-chrome-${slot}-`));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "invoiceguard-chrome-"));
+  // Port 0: Chrome picks a free port and writes it to DevToolsActivePort, so any
+  // number of runs (CLI, CI, parallel MCP calls) can coexist.
   const proc = spawn(bin, [
     "--headless=new", "--no-sandbox", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-    `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, "--window-size=1366,900", "about:blank",
+    "--remote-debugging-port=0", `--user-data-dir=${dir}`, "--window-size=1366,900", "about:blank",
   ], { stdio: "ignore" });
-  const endpoint = `http://127.0.0.1:${port}`;
-  for (let i = 0; i < 50; i++) {
-    if (await reachable(`${endpoint}/json/version`)) {
+  let endpoint = null;
+  for (let i = 0; i < 75; i++) {
+    if (!endpoint) {
+      const portLine = (() => { try { return fs.readFileSync(path.join(dir, "DevToolsActivePort"), "utf8").split("\n")[0]; } catch { return ""; } })();
+      if (/^\d+$/.test(portLine)) endpoint = `http://127.0.0.1:${portLine}`;
+    }
+    if (endpoint && await reachable(`${endpoint}/json/version`)) {
       const close = async () => {
         if (proc.exitCode === null) {
           const exited = new Promise((r) => proc.once("exit", r));
@@ -192,13 +211,20 @@ async function launchChrome(slot) {
 
 // ------------------------------------------------------------------ kane
 
+/** A rulebook as an explicit checklist: one "Assert that …" per rule, so Kane checks every rule. */
+function ruleAssertions(rules) {
+  return rules.map((r) => {
+    const text = r.replace(/^\s*\d+\.\s*/, "").replace(/\.\s*$/, "");
+    return `Assert that ${text.charAt(0).toLowerCase()}${text.slice(1)}.`;
+  });
+}
+
 function invoiceObjective(pack) {
   return [
-    `This page is an invoice that must follow the rulebook "${pack.title}". Read the whole invoice carefully.`,
-    "Check it against every rule below and verify that each rule holds.",
-    "If every rule holds, the check passes. If any rule is violated, that is a product bug: fail and name the rule number(s) and what the page shows.",
+    `This page is a document that is checked against the rulebook "${pack.title}". Read the whole document carefully first.`,
+    "Then check each of the following statements one at a time, looking at the document for evidence. Any statement that is false is a product bug.",
     "",
-    ...pack.rules,
+    ...ruleAssertions(pack.rules),
   ].join("\n");
 }
 
@@ -271,9 +297,9 @@ function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint, allFailu
 /** A failure Kane attributes to the product, as opposed to browser/infra trouble. */
 const isProductBug = (r) => r.status === "failed" && (!r.family || r.family === "application_issue");
 
-async function verify(opts, slot) {
+async function verify(opts) {
   for (let attempt = 1; ; attempt++) {
-    const chrome = await launchChrome(slot);
+    const chrome = await launchChrome();
     const r = await runKane({ ...opts, cdpEndpoint: chrome?.endpoint });
     await chrome?.close();
     if (r.status === "passed" || isProductBug(r)) return { ...r, attempts: attempt };
@@ -396,40 +422,114 @@ async function gate(opts = {}) {
   }
   log(summary.passed
     ? green(bold(`\nAll ${results.length} checks passed.`)) + dim(" Report: .kane/report.md")
-    : red(bold(`\n${results.filter((x) => x.result.status !== "passed").length} of ${results.length} checks failed.`)) + dim(" Report: .kane/report.md"));
+    : red(bold(`\n${results.filter((x) => x.result.status !== "passed").length} of ${results.length} checks did not pass`))
+      + dim(` (${results.filter((x) => x.result.status === "failed").length} failed, ${results.filter((x) => !["passed", "failed"].includes(x.result.status)).length} inconclusive/error). Report: .kane/report.md`));
   return summary;
+}
+
+const escapeHtml = (t) => t.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+
+/** Plain text / markdown → a readable HTML page Kane can open. */
+function textToHtml(title, text) {
+  const body = text.split(/\n{2,}/).map((para) => {
+    const h = para.match(/^#{1,6}\s+(.+)/);
+    return h ? `<h2>${escapeHtml(h[1])}</h2>` : `<p>${escapeHtml(para).replace(/\n/g, "<br>")}</p>`;
+  }).join("\n");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>body{font:15px/1.6 Georgia,serif;max-width:760px;margin:32px auto;padding:0 16px;color:#222;background:#fff}</style>
+</head><body>${body}</body></html>`;
+}
+
+/**
+ * Make documents reachable by Kane's browser. Each doc is one of
+ * { url } | { html } | { text } | { file } (html, txt, md or pdf).
+ * Returns { urls: string[], texts: string[], close() }.
+ */
+async function serveDocuments(docs) {
+  const pages = [];
+  const urls = [], texts = [];
+  for (const [i, doc] of docs.entries()) {
+    const name = doc.name ?? `document-${i + 1}`;
+    if (doc.url) {
+      urls.push(doc.url);
+      texts.push(await fetch(doc.url).then((r) => r.text()).catch(() => ""));
+      continue;
+    }
+    let body, type = "text/html; charset=utf-8", ext = "html";
+    if (doc.html) body = doc.html;
+    else if (doc.text) body = textToHtml(name, doc.text);
+    else if (doc.file) {
+      const file = path.resolve(ROOT, doc.file);
+      if (!fs.existsSync(file)) throw new Error(`No such file: ${doc.file}`);
+      if (/\.pdf$/i.test(file)) { body = fs.readFileSync(file); type = "application/pdf"; ext = "pdf"; }
+      else if (/\.html?$/i.test(file)) body = fs.readFileSync(file, "utf8");
+      else body = textToHtml(path.basename(file), fs.readFileSync(file, "utf8"));
+    } else throw new Error("Each document needs one of: url, html, text, file");
+    pages.push({ route: `/${i}/${name.replace(/[^\w.-]+/g, "-")}.${ext}`, body, type });
+    texts.push(typeof body === "string" ? body : "");
+    urls.push(null);
+  }
+  let server = null;
+  if (pages.length) {
+    server = createServer((req, res) => {
+      const page = pages.find((p) => req.url === p.route);
+      if (!page) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { "content-type": page.type });
+      res.end(page.body);
+    });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    let k = 0;
+    for (let i = 0; i < urls.length; i++) if (urls[i] === null) urls[i] = base + pages[k++].route;
+  }
+  return { urls, texts, close: () => server?.close() };
+}
+
+/** HTML body of a document, with styles, scripts and comments removed. */
+async function documentBody(doc) {
+  if (doc.text) return textToHtml("", doc.text).match(/<body>([\s\S]*)<\/body>/)[1];
+  let html = doc.html;
+  if (doc.url) html = await fetch(doc.url).then((r) => r.text());
+  if (doc.file) {
+    const file = path.resolve(ROOT, doc.file);
+    if (/\.pdf$/i.test(file)) throw new Error("PDFs are not supported for invoice-vs-contract yet; pass HTML, text or a URL");
+    const raw = fs.readFileSync(file, "utf8");
+    if (!/\.html?$/i.test(file)) return textToHtml("", raw).match(/<body>([\s\S]*)<\/body>/)[1];
+    html = raw;
+  }
+  const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] ?? html;
+  return body.replace(/<(script|style)[\s\S]*?<\/\1>/gi, "").replace(/<!--[\s\S]*?-->/g, "");
+}
+
+/** One page holding both documents, so Kane reads them together in a single flow. */
+async function serveComparison(contract, invoice) {
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Contract and invoice</title>
+<style>body{font:15px/1.6 Georgia,serif;max-width:820px;margin:32px auto;padding:0 16px;color:#222;background:#fff}
+section{border:2px solid #333;padding:8px 24px 24px;margin-bottom:32px} .doc-label{font:700 13px sans-serif;letter-spacing:.12em}
+table{border-collapse:collapse;width:100%} td,th{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}</style></head><body>
+<section id="contract"><p class="doc-label">DOCUMENT 1 OF 2: THE CONTRACT</p>${await documentBody(contract)}</section>
+<section id="invoice"><p class="doc-label">DOCUMENT 2 OF 2: THE INVOICE</p>${await documentBody(invoice)}</section>
+</body></html>`;
+  return serveDocuments([{ html, name: "contract-and-invoice" }]);
 }
 
 async function audit(target, opts = {}) {
   if (!target) throw new Error("usage: invoiceguard audit <url | file.html | file.pdf> [--pack india-gst|us-sales-tax | --rules file.md]");
   const cfg = loadConfig();
+  const docs = await serveDocuments([/^https?:\/\//.test(target) ? { url: target } : { file: target }]);
   let pack;
   if (opts.rules) pack = { name: path.basename(opts.rules, ".md"), ...loadRulebook(opts.rules) };
   else {
-    let name = opts.pack;
-    if (!name) {
-      const text = /^https?:\/\//.test(target)
-        ? await fetch(target).then((r) => r.text()).catch(() => "")
-        : /\.pdf$/i.test(target) ? "" : fs.readFileSync(path.resolve(target), "utf8");
-      name = detectPack(text);
-      if (!name) throw new Error("Could not tell which country this invoice is from. Pass --pack india-gst or --pack us-sales-tax.");
-    }
+    const name = opts.pack ?? detectPack(docs.texts[0]);
+    if (!name) { docs.close(); throw new Error("Could not tell what kind of document this is. Pass --pack india-gst, us-sales-tax or services-contract."); }
     pack = loadPack(cfg, name);
   }
-  let url = target, server;
-  if (!/^https?:\/\//.test(target)) {
-    const file = path.resolve(target);
-    if (!fs.existsSync(file)) throw new Error(`No such file: ${target}`);
-    const type = file.endsWith(".pdf") ? "application/pdf" : "text/html; charset=utf-8";
-    server = createServer((_, res) => { res.writeHead(200, { "content-type": type }); fs.createReadStream(file).pipe(res); });
-    await new Promise((r) => server.listen(0, "127.0.0.1", r));
-    url = `http://127.0.0.1:${server.address().port}/${path.basename(file)}`;
-  }
+  const url = docs.urls[0];
   const visual = /\.pdf($|\?)/i.test(target);
   log(bold(`\nInvoiceGuard audit`) + dim(`  ${target} · ${pack.title} (${pack.rules.length} rules)${visual ? " · visual mode (PDF)" : ""}`));
   const check = { id: "audit", title: `Audit of ${path.basename(target)}`, url };
-  const r = await verify({ objective: invoiceObjective(pack), url, timeoutSeconds: cfg.timeoutSeconds, visual, allFailures: true, logName: "audit" }, 0);
-  server?.close();
+  const r = await verify({ objective: invoiceObjective(pack), url, timeoutSeconds: cfg.timeoutSeconds, visual, allFailures: true, logName: "audit" });
+  docs.close();
   printResult(check, r);
   writeJson(path.join(STATE_DIR, "audit.json"), { target, at: new Date().toISOString(), result: r });
   return r;
@@ -509,8 +609,19 @@ function init() {
   log(dim("Next: list your invoice pages in invoiceguard.config.json, then `invoiceguard gate`."));
 }
 
+// ------------------------------------------------------------------ exports (used by mcp/server.mjs)
+
+export {
+  loadConfig, loadRulebook, loadPack, detectPack, invoiceObjective, ruleAssertions, verify, gate,
+  failureReport, serveDocuments, serveComparison, PKG_DIR, ROOT,
+};
+
 // ------------------------------------------------------------------ main
 
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+if (isMain) await main();
+
+async function main() {
 const [cmd, ...rest] = process.argv.slice(2);
 const flag = (name) => { const i = rest.indexOf(name); return i >= 0 ? (rest[i + 1] ?? true) : undefined; };
 
@@ -532,7 +643,7 @@ try {
     log(`invoiceguard — invoices (India GST, US sales tax) verified by Kane CLI
 
   gate [--only <id>] [--no-cache] [--json]   verify this app's invoices and flows
-  audit <url|file> [--pack name] [--json]    audit any invoice page or PDF (India GST / US sales tax, auto-detected)
+  audit <url|file> [--pack name] [--json]    audit any invoice or contract (html, txt, md, pdf or URL; rulebook auto-detected)
   hook                                       Claude Code Stop hook (reads stdin)
   init                                       install the hook and rules here`);
     process.exit(cmd ? 2 : 0);
@@ -540,4 +651,5 @@ try {
 } catch (err) {
   log(red(`invoiceguard: ${err.message}`));
   process.exit(2);
+}
 }
