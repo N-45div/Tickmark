@@ -5,12 +5,13 @@
 //   invoiceguard audit <url|file> check any invoice page (yours or a vendor's);
 //                                 picks the India GST or US sales tax rulebook automatically
 //   invoiceguard hook            Claude Code Stop hook: block "done" until Kane passes
+//   invoiceguard prove           plant each bug in demo/, run unit tests + Kane, print a scorecard
 //   invoiceguard init            install the hook + rules into the current project
 //
 // Zero dependencies. Needs `kane-cli` on PATH and a logged-in profile
 // (`kane-cli login`), or LT_USERNAME / LT_ACCESS_KEY in the environment.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import fs from "node:fs";
@@ -321,7 +322,7 @@ async function pool(items, n, fn) {
 
 function printResult(check, r) {
   const tag = !r.cached ? dim(` ${r.seconds ?? 0}s`)
-    : dim(r.status === "passed" ? " (unchanged since last pass, skipped)" : " (code unchanged since this failure, not re-run)");
+    : dim(r.status === "passed" ? " (this exact version passed before, skipped)" : " (this exact version failed before, not re-run)");
   if (r.status === "passed") return log(`${green("✓")} ${check.title}${tag}`);
   const mark = r.status === "failed" ? red("✗") : yellow("?");
   if (r.status === "inconclusive") log(`${mark} ${bold(check.title)}${tag} ${yellow("— Kane says the check itself is the problem, not the invoice")}`);
@@ -383,8 +384,36 @@ async function gate(opts = {}) {
   ];
   if (opts.only) checks = checks.filter((ch) => ch.id.includes(opts.only));
 
+  // Verdict cache, keyed by content hash: every code version that passed or failed is
+  // remembered, so going back to a known version (e.g. reverting a bug) costs nothing.
+  //   { [checkId]: { pass: [key, ...], fail: { [key]: result } } }
   const cacheFile = path.join(STATE_DIR, "cache.json");
-  const cache = opts.noCache ? {} : readJson(cacheFile, {});
+  const cache = {};
+  for (const [k, v] of Object.entries(readJson(cacheFile, {}))) { // migrate the old flat format
+    if (k.startsWith("fail:")) { const id = k.slice(5); (cache[id] ??= { pass: [], fail: {} }).fail[v.key] = v.result; }
+    else if (typeof v === "string") (cache[k] ??= { pass: [], fail: {} }).pass.push(v);
+    else {
+      const e = (cache[k] ??= { pass: [], fail: {} });
+      e.pass.push(...(v.pass ?? []));
+      Object.assign(e.fail, v.fail ?? {});
+    }
+  }
+  writeJson(cacheFile, cache);
+  const known = (id, key) => {
+    if (opts.noCache) return null;
+    if (cache[id]?.pass.includes(key)) return { status: "passed", cached: true };
+    if (cache[id]?.fail[key]) return { ...cache[id].fail[key], cached: true };
+    return null;
+  };
+  const remember = (id, key, r) => {
+    const e = (cache[id] ??= { pass: [], fail: {} });
+    if (r.status === "passed") { e.pass = [key, ...e.pass.filter((k) => k !== key)].slice(0, 25); delete e.fail[key]; }
+    else if (r.status === "failed") {
+      e.fail[key] = r; e.pass = e.pass.filter((k) => k !== key);
+      const keys = Object.keys(e.fail); if (keys.length > 25) delete e.fail[keys[0]];
+    }
+    writeJson(cacheFile, cache);
+  };
   const srcHash = sourceHash(cfg);
   for (const ch of checks) {
     ch.key = ch.kind === "invoice"
@@ -392,23 +421,16 @@ async function gate(opts = {}) {
       : sha(ch.id, ch.raw, srcHash);
   }
 
-  const fresh = checks.filter((ch) => cache[ch.id] !== ch.key && cache[`fail:${ch.id}`]?.key !== ch.key).length;
+  const fresh = checks.filter((ch) => !known(ch.id, ch.key)).length;
   log(bold(`\nInvoiceGuard · verifying with Kane CLI`) + dim(`  ${checks.length} checks, ${fresh} need a fresh run`));
 
   const results = await pool(checks, cfg.concurrency, async (ch, slot) => {
-    let r;
-    const prevFail = cache[`fail:${ch.id}`];
-    if (cache[ch.id] === ch.key) r = { status: "passed", cached: true };
-    // Same code, same verdict: hand back the earlier product-bug report instead of paying for a re-run.
-    else if (prevFail?.key === ch.key) r = { ...prevFail.result, cached: true };
-    else {
+    let r = known(ch.id, ch.key);
+    if (!r) {
       r = ch.kind === "invoice"
         ? await verify({ objective: invoiceObjective(ch.pack), url: ch.url, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot)
         : await verify({ objective: ch.objective, url: `${base}/`, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot);
-      if (r.status === "passed") cache[ch.id] = ch.key; else delete cache[ch.id];
-      if (r.status === "failed") cache[`fail:${ch.id}`] = { key: ch.key, result: r };
-      else delete cache[`fail:${ch.id}`];
-      writeJson(cacheFile, cache);
+      remember(ch.id, ch.key, r);
     }
     printResult(ch, r);
     return { check: { id: ch.id, title: ch.title, url: ch.url }, result: r };
@@ -422,7 +444,7 @@ async function gate(opts = {}) {
     results,
   };
   writeReport(summary);
-  if (summary.passed && !opts.only) {
+  if (summary.passed && !opts.only && !opts.noRecord) { // never record a planted-bug run as "green"
     const hookFile = path.join(STATE_DIR, "hook.json");
     writeJson(hookFile, { ...readJson(hookFile, {}), lastGreen: srcHash, attempts: 0 });
   }
@@ -453,12 +475,13 @@ function textToHtml(title, text) {
  */
 async function serveDocuments(docs) {
   const pages = [];
-  const urls = [], texts = [];
+  const urls = [], texts = [], visual = [];
   for (const [i, doc] of docs.entries()) {
     const name = doc.name ?? `document-${i + 1}`;
     if (doc.url) {
       urls.push(doc.url);
       texts.push(await fetch(doc.url).then((r) => r.text()).catch(() => ""));
+      visual.push(/\.pdf($|\?)/i.test(doc.url));
       continue;
     }
     let body, type = "text/html; charset=utf-8", ext = "html";
@@ -467,12 +490,27 @@ async function serveDocuments(docs) {
     else if (doc.file) {
       const file = path.resolve(ROOT, doc.file);
       if (!fs.existsSync(file)) throw new Error(`No such file: ${doc.file}`);
-      if (/\.pdf$/i.test(file)) { body = fs.readFileSync(file); type = "application/pdf"; ext = "pdf"; }
+      if (/\.pdf$/i.test(file)) {
+        // Prefer the PDF's own text (layout kept) as a normal page: Kane reads page text far more
+        // reliably than it reads a PDF viewer visually. Fall back to the raw PDF + visual mode.
+        const txt = spawnSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" });
+        if (txt.status === 0 && txt.stdout.trim()) {
+          body = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(path.basename(file))}</title>`
+            + `<style>body{background:#fff;color:#111;margin:24px}pre{font:14px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap}</style>`
+            + `</head><body><pre>${escapeHtml(txt.stdout)}</pre></body></html>`;
+          texts.push(txt.stdout); visual.push(false);
+          pages.push({ route: `/${i}/${name.replace(/[^\w.-]+/g, "-")}.html`, body, type });
+          urls.push(null);
+          continue;
+        }
+        body = fs.readFileSync(file); type = "application/pdf"; ext = "pdf";
+      }
       else if (/\.html?$/i.test(file)) body = fs.readFileSync(file, "utf8");
       else body = textToHtml(path.basename(file), fs.readFileSync(file, "utf8"));
     } else throw new Error("Each document needs one of: url, html, text, file");
     pages.push({ route: `/${i}/${name.replace(/[^\w.-]+/g, "-")}.${ext}`, body, type });
     texts.push(typeof body === "string" ? body : "");
+    visual.push(type === "application/pdf");
     urls.push(null);
   }
   let server = null;
@@ -488,7 +526,7 @@ async function serveDocuments(docs) {
     let k = 0;
     for (let i = 0; i < urls.length; i++) if (urls[i] === null) urls[i] = base + pages[k++].route;
   }
-  return { urls, texts, close: () => server?.close() };
+  return { urls, texts, visual, close: () => server?.close() };
 }
 
 /** HTML body of a document, with styles, scripts and comments removed. */
@@ -531,14 +569,95 @@ async function audit(target, opts = {}) {
     pack = loadPack(cfg, name);
   }
   const url = docs.urls[0];
-  const visual = /\.pdf($|\?)/i.test(target);
-  log(bold(`\nInvoiceGuard audit`) + dim(`  ${target} · ${pack.title} (${pack.rules.length} rules)${visual ? " · visual mode (PDF)" : ""}`));
+  const visual = docs.visual[0];
+  const pdfText = /\.pdf$/i.test(target) && !visual;
+  log(bold(`\nInvoiceGuard audit`) + dim(`  ${target} · ${pack.title} (${pack.rules.length} rules)${visual ? " · visual mode (PDF)" : pdfText ? " · PDF text" : ""}`));
   const check = { id: "audit", title: `Audit of ${path.basename(target)}`, url };
   const r = await verify({ objective: invoiceObjective(pack), url, timeoutSeconds: cfg.timeoutSeconds, visual, allFailures: true, logName: "audit" });
   docs.close();
   printResult(check, r);
   writeJson(path.join(STATE_DIR, "audit.json"), { target, at: new Date().toISOString(), result: r });
   return r;
+}
+
+/**
+ * Plant each realistic bug from demo/*.patch, one at a time, and record whether the
+ * unit tests and Kane catch it. Patches are always reverted, even on Ctrl-C.
+ */
+async function prove(opts = {}) {
+  const demoDir = path.join(ROOT, "demo");
+  const meta = readJson(path.join(demoDir, "bugs.json"), {});
+  let patches = fs.readdirSync(demoDir).filter((f) => f.endsWith(".patch")).sort();
+  if (opts.only) patches = patches.filter((f) => f.includes(opts.only));
+  if (!patches.length) throw new Error("No demo/*.patch files to plant");
+  const git = (...args) => spawnSync("git", args, { cwd: ROOT, encoding: "utf8" });
+  for (const p of patches) {
+    const check = git("apply", "--check", path.join("demo", p));
+    if (check.status !== 0) throw new Error(`${p} does not apply cleanly (is it already applied, or are files modified?)\n${check.stderr}`);
+  }
+
+  let applied = null;
+  const revert = () => { if (applied) { git("apply", "-R", path.join("demo", applied)); applied = null; } };
+  const onSignal = () => { revert(); process.exit(130); };
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
+
+  const rows = [];
+  try {
+    for (const p of patches) {
+      const name = p.replace(/\.patch$/, "");
+      const info = meta[name] ?? { title: name, where: "", impact: "" };
+      log(bold(`\n━━ Planting: ${info.title}`) + dim(`  (${p})`));
+      git("apply", path.join("demo", p));
+      applied = p;
+      await new Promise((r) => setTimeout(r, 1500)); // let the dev server pick up the change
+
+      const unit = spawnSync("npx", ["vitest", "run"], { cwd: ROOT, encoding: "utf8" });
+      const unitOut = (unit.stdout ?? "") + (unit.stderr ?? "");
+      const unitFailed = Number(unitOut.match(/Tests\s+(\d+) failed/)?.[1] ?? 0);
+      log(unit.status === 0 ? dim("unit tests: all passed (bug not seen)") : red(`unit tests: ${unitFailed || "some"} failed (bug caught)`));
+
+      const summary = await gate({ noCache: opts.noCache, noRecord: true });
+      const caught = summary.results.filter((x) => x.result.status === "failed");
+      const unsure = summary.results.filter((x) => !["passed", "failed"].includes(x.result.status));
+      rows.push({
+        bug: name, ...info,
+        unitCaught: unit.status !== 0, unitFailed,
+        kaneCaught: caught.length > 0,
+        kaneChecks: caught.map((x) => ({ check: x.check.title, bug: x.result.bugTitle ?? x.result.oneLiner ?? null, recording: x.result.testUrl ?? null })),
+        kaneInconclusive: unsure.length,
+      });
+      revert();
+    }
+  } finally {
+    revert();
+    process.removeListener("SIGINT", onSignal);
+    process.removeListener("SIGTERM", onSignal);
+  }
+
+  log(bold("\n━━ Back on the clean code"));
+  const clean = await gate({});
+
+  const unitN = rows.filter((r) => r.unitCaught).length, kaneN = rows.filter((r) => r.kaneCaught).length;
+  const md = [
+    `# InvoiceGuard proof: ${kaneN}/${rows.length} planted bugs caught by Kane CLI, ${unitN}/${rows.length} by unit tests`,
+    "",
+    `${new Date().toISOString()} · clean code afterwards: ${clean.passed ? "all checks green" : "NOT green"}`,
+    "",
+    "| Planted bug | Where | Unit tests | Kane CLI | What Kane reported |",
+    "| --- | --- | --- | --- | --- |",
+    ...rows.map((r) => `| **${r.title}**<br>${r.impact} | ${r.where} | ${r.unitCaught ? `✅ caught (${r.unitFailed} failed)` : "❌ missed"} | ${r.kaneCaught ? `✅ caught (${r.kaneChecks.length} check${r.kaneChecks.length > 1 ? "s" : ""})` : r.kaneInconclusive ? "⚠️ inconclusive" : "❌ missed"} | ${r.kaneChecks.map((k) => `${k.bug ?? k.check}${k.recording ? ` ([recording](${k.recording}))` : ""}`).join("<br>") || "–"} |`),
+    "",
+    "Reproduce: `npm run prove` (patches live in `demo/`, descriptions in `demo/bugs.json`).",
+  ].join("\n");
+  writeJson(path.join(STATE_DIR, "prove.json"), { at: new Date().toISOString(), rows, cleanPassed: clean.passed });
+  fs.writeFileSync(path.join(STATE_DIR, "prove.md"), md);
+
+  log(bold(`\n━━ Scorecard`));
+  for (const r of rows)
+    log(`${r.kaneCaught ? green("Kane ✓") : red("Kane ✗")}  ${r.unitCaught ? green("unit ✓") : red("unit ✗")}  ${r.title}`);
+  log(bold(`\nKane CLI caught ${kaneN}/${rows.length}. Unit tests caught ${unitN}/${rows.length}.`) + dim(" Report: .kane/prove.md"));
+  return { rows, kaneN, unitN, cleanPassed: clean.passed };
 }
 
 /**
@@ -640,6 +759,9 @@ try {
     const r = await audit(rest.find((a) => !a.startsWith("--") && a !== flag("--rules") && a !== flag("--pack")), { rules: flag("--rules"), pack: flag("--pack") });
     if (rest.includes("--json")) console.log(JSON.stringify(r, null, 2));
     process.exit(r.status === "passed" ? 0 : 1);
+  } else if (cmd === "prove") {
+    const r = await prove({ only: flag("--only"), noCache: rest.includes("--no-cache") });
+    process.exit(r.kaneN === r.rows.length && r.cleanPassed ? 0 : 1);
   } else if (cmd === "hook") {
     await hook();
     process.exit(0);
@@ -650,6 +772,7 @@ try {
 
   gate [--only <id>] [--no-cache] [--json]   verify this app's invoices and flows
   audit <url|file> [--pack name] [--json]    audit any invoice or contract (html, txt, md, pdf or URL; rulebook auto-detected)
+  prove [--only <name>] [--no-cache]         plant each demo/*.patch bug; scorecard of unit tests vs Kane
   hook                                       Claude Code Stop hook (reads stdin)
   init                                       install the hook and rules here`);
     process.exit(cmd ? 2 : 0);

@@ -12,7 +12,8 @@
     "start": "next start -p 3000",
     "test": "vitest run",
     "gate": "node cli/invoiceguard.mjs gate",
-    "audit": "node cli/invoiceguard.mjs audit"
+    "audit": "node cli/invoiceguard.mjs audit",
+    "prove": "node cli/invoiceguard.mjs prove"
   },
   "license": "MIT",
   "dependencies": {
