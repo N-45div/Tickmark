@@ -58,7 +58,9 @@ Over-collecting annoys customers. Under-collecting becomes your own liability at
 ```
 
 - **Skips unchanged work.** If an invoice's rendered markup hasn't changed since Kane last passed it,
-  it's skipped. If nothing in the app changed, the hook does nothing and spends no credits.
+  it's skipped. If nothing in the app changed, the hook does nothing and spends no credits. Failures
+  are remembered too: unchanged code gets the same bug report back in under a second instead of a
+  new 2-minute Kane run (`--no-cache` forces fresh runs).
 - **Separates bugs from bad checks.** When Kane decides a failure is a problem with the check rather
   than the product, it's reported as *inconclusive*. The agent is told **not** to change app code for it.
 - **Can't loop forever.** After 3 failed fix attempts it stops and hands over to a human, with the
@@ -123,19 +125,26 @@ node cli/invoiceguard.mjs init          # adds the Stop hook to .claude/settings
 claude                                  # work as usual; Kane signs off before Claude stops
 ```
 
-### Try the demo bug
+### Try the demo bugs
 
-`demo/place-of-supply-bug.patch` is a one-line "refactor" that makes place of supply default to the
-**seller's** state. Every out-of-state client then gets CGST+SGST instead of IGST. The unit tests still
-pass because the bug is in the UI layer. Kane catches it.
+Two one-line "refactors" that look harmless. The unit tests stay green for both; Kane catches both.
+
+| Patch | What breaks | What Kane reports |
+| --- | --- | --- |
+| `demo/place-of-supply-bug.patch` | Place of supply defaults to the **seller's** state, so out-of-state clients get CGST+SGST instead of IGST | *"Invoice preview retains Karnataka after client state changes"* |
+| `demo/us-tax-on-subtotal-bug.patch` | The US invoice template taxes the **whole subtotal**, including non-taxable services | *"Sales tax includes a non-taxable line item: should be $76.31, not $274.31"* |
 
 ```bash
 git apply demo/place-of-supply-bug.patch
+npm test              # ✓ 17 passed: the unit tests can't see it
 npm run gate          # ✗ Create an inter-state invoice from the editor
+git apply -R demo/place-of-supply-bug.patch
 ```
 
-Or open Claude Code and ask it to apply the patch and finish. The Stop hook blocks it, hands it Kane's
-report, and Claude fixes the bug on its own.
+**The real agent loop:** [`docs/evidence/closed-loop.md`](docs/evidence/closed-loop.md) is the transcript
+of a real Claude Code session. Claude was asked to apply the "teammate refactor" and finish. The Stop
+hook blocked it with Kane's report, Claude fixed the bug, and the hook let it finish, in 4 minutes
+with no human in between.
 
 ## Configuration
 
