@@ -1,0 +1,24 @@
+--- a/components/UsInvoiceView.tsx
++++ b/components/UsInvoiceView.tsx
+@@ -13,6 +13,9 @@
+ 
+ export function UsInvoiceView({ inv }: { inv: ComputedUsInvoice }) {
+   const { input, decision } = inv;
++  // Simpler: show tax as rate × subtotal and keep the total consistent with it
++  const tax = decision.collect ? Math.round(inv.subtotal * input.taxRate) / 100 : 0;
++  const total = inv.subtotal + tax;
+   return (
+     <article className="invoice" data-testid="invoice">
+       <header className="inv-head">
+@@ -72,9 +75,9 @@
+             <tr><td>Subtotal</td><td className="num">{formatUSD(inv.subtotal)}</td></tr>
+             <tr data-testid="tax-line">
+               <td>{decision.collect ? decision.label : "Sales tax"}</td>
+-              <td className="num">{formatUSD(inv.tax)}</td>
++              <td className="num">{formatUSD(tax)}</td>
+             </tr>
+-            <tr className="grand"><td>Total due</td><td className="num" data-testid="grand-total">{formatUSD(inv.total)}</td></tr>
++            <tr className="grand"><td>Total due</td><td className="num" data-testid="grand-total">{formatUSD(total)}</td></tr>
+           </tbody>
+         </table>
+       </section>
