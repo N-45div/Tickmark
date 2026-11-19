@@ -18,6 +18,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { checkInvoiceMath } from "./mathcheck.mjs";
 
 const ROOT = process.cwd();
 // Where reports, caches and raw Kane logs go. Falls back to a temp dir when the
@@ -85,8 +86,11 @@ function loadRulebook(file) {
 function loadPack(cfg, name) {
   const file = cfg.rulePacks[name];
   if (!file) throw new Error(`Unknown rule pack "${name}". Known: ${Object.keys(cfg.rulePacks).join(", ")}`);
-  return { name, ...loadRulebook(file) };
+  return { name, kind: packKind(name), ...loadRulebook(file) };
 }
+
+/** Contract rulebooks are checked as text; everything else is an invoice whose numbers we re-add in code. */
+const packKind = (name) => (/contract/i.test(name) ? "contract" : "invoice");
 
 /** Guess which rulebook a document needs from its text. */
 function detectPack(text) {
@@ -220,6 +224,22 @@ function ruleAssertions(rules) {
   });
 }
 
+/**
+ * Kane reads, code does the math. A separate Kane pass only copies the numbers off the page,
+ * and mathcheck.mjs verifies every sum. It is separate because Kane stops a run as soon as it
+ * spots a product bug, which would lose the extraction if both happened in one run.
+ */
+const EXTRACTION_OBJECTIVE = [
+  "This page is an invoice. Do not judge it; only copy these values from the page exactly as printed (keep currency symbols and percent signs):",
+  "Store the line items as 'line_items': a JSON array with one object per row of the items table, each with the keys description, quantity, rate, amount and taxable (copy the text of the Taxable or GST column; empty string if there is none).",
+  "Store the subtotal or total taxable value as 'subtotal'.",
+  "Store the tax rows as 'tax_lines': a JSON array with one object per tax row in the totals, each with the keys label and amount.",
+  "Store the round off amount as 'round_off' (empty string if none is shown).",
+  "Store the grand total or total due as 'total'.",
+  "Store the amount in words as 'amount_in_words' (empty string if none is shown).",
+  "Assert that line_items, subtotal, tax_lines and total have been stored.",
+].join("\n");
+
 function invoiceObjective(pack) {
   return [
     `This page is a document that is checked against the rulebook "${pack.title}". Read the whole document carefully first.`,
@@ -288,6 +308,7 @@ function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint, allFailu
         evidence: (v.signals ?? []).map((s) => s.excerpt).filter(Boolean),
         failedSteps: steps.filter((s) => s.status === "failed" && !/^wait:/.test(s.remark ?? "")).map((s) => s.remark),
         testUrl: runEnd.test_url,
+        finalState: runEnd.final_state ?? {},
         credits: runEnd.credits_consumed ?? runEnd.credits,
       });
     });
@@ -299,6 +320,41 @@ function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint, allFailu
 const isProductBug = (r) => r.status === "failed" && (!r.family || r.family === "application_issue");
 
 async function verify(opts) {
+  if (!opts.mathCheck) return verifyWithKane(opts);
+  const [r, read] = await Promise.all([
+    verifyWithKane(opts),
+    runKaneOnce({
+      objective: EXTRACTION_OBJECTIVE, url: opts.url, timeoutSeconds: opts.timeoutSeconds,
+      visual: opts.visual, logName: `${opts.logName ?? "run"}-read`,
+    }),
+  ]);
+  return withMathCheck(r, read);
+}
+
+async function runKaneOnce(opts) {
+  const chrome = await launchChrome();
+  try { return await runKane({ ...opts, cdpEndpoint: chrome?.endpoint }); }
+  finally { await chrome?.close(); }
+}
+
+/** Re-add the invoice's numbers (as Kane read them) in code; arithmetic errors fail the check. */
+function withMathCheck(r, read) {
+  if (r.status === "error") return r;
+  const math = checkInvoiceMath(read.finalState ?? {});
+  math.readCredits = read.credits ?? 0;
+  if (!math.findings.length) return { ...r, math };
+  const kaneFound = r.status === "failed";
+  return {
+    ...r,
+    math,
+    status: "failed",
+    bugTitle: kaneFound && r.bugTitle ? r.bugTitle : `Arithmetic error: ${math.findings[0]}`,
+    rootCause: kaneFound ? r.rootCause
+      : `InvoiceGuard's math check re-added the numbers Kane read from the page and found ${math.findings.length} error(s).`,
+  };
+}
+
+async function verifyWithKane(opts) {
   for (let attempt = 1; ; attempt++) {
     const chrome = await launchChrome();
     const r = await runKane({ ...opts, cdpEndpoint: chrome?.endpoint });
@@ -323,7 +379,8 @@ async function pool(items, n, fn) {
 function printResult(check, r) {
   const tag = !r.cached ? dim(` ${r.seconds ?? 0}s`)
     : dim(r.status === "passed" ? " (this exact version passed before, skipped)" : " (this exact version failed before, not re-run)");
-  if (r.status === "passed") return log(`${green("✓")} ${check.title}${tag}`);
+  const mathTag = r.math && !r.math.findings.length && r.math.checked.length ? dim(` · math ✓ ${r.math.checked.length} sums`) : "";
+  if (r.status === "passed") return log(`${green("✓")} ${check.title}${tag}${mathTag}`);
   const mark = r.status === "failed" ? red("✗") : yellow("?");
   if (r.status === "inconclusive") log(`${mark} ${bold(check.title)}${tag} ${yellow("— Kane says the check itself is the problem, not the invoice")}`);
   else
@@ -332,6 +389,7 @@ function printResult(check, r) {
   const why = r.rootCause || r.oneLiner || r.reason;
   if (why) log(`    ${why}`);
   for (const f of r.failedSteps ?? []) log(red(`    • ${f.replace(/^assert:\s*/, "")}`));
+  for (const f of r.math?.findings ?? []) log(red(`    • math: ${f}`));
   if (r.suggestion) log(dim(`    fix: ${r.suggestion}`));
   if (r.testUrl) log(dim(`    ${r.testUrl}`));
 }
@@ -346,6 +404,7 @@ function failureReport(failures) {
     if (r.rootCause) lines.push(`Root cause: ${r.rootCause}`);
     else if (r.summary) lines.push(`Summary: ${r.summary}`);
     if (r.failedSteps?.length) lines.push(`Failed assertion: ${r.failedSteps.join("; ")}`);
+    if (r.math?.findings.length) lines.push(`Arithmetic (re-added in code from the numbers Kane read on the page):\n${r.math.findings.map((f) => `  - ${f}`).join("\n")}`);
     if (r.evidence?.length) lines.push(`Evidence seen on the page:\n${r.evidence.map((e) => `  - ${e}`).join("\n")}`);
     if (r.suggestion) lines.push(`Kane's suggestion: ${r.suggestion}`);
     if (r.testUrl) lines.push(`Recording: ${r.testUrl}`);
@@ -417,7 +476,7 @@ async function gate(opts = {}) {
   const srcHash = sourceHash(cfg);
   for (const ch of checks) {
     ch.key = ch.kind === "invoice"
-      ? sha(ch.id, invoiceObjective(ch.pack), await renderedInvoice(ch.url))
+      ? sha(ch.id, invoiceObjective(ch.pack), EXTRACTION_OBJECTIVE, "math-v1", await renderedInvoice(ch.url))
       : sha(ch.id, ch.raw, srcHash);
   }
 
@@ -428,7 +487,7 @@ async function gate(opts = {}) {
     let r = known(ch.id, ch.key);
     if (!r) {
       r = ch.kind === "invoice"
-        ? await verify({ objective: invoiceObjective(ch.pack), url: ch.url, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot)
+        ? await verify({ objective: invoiceObjective(ch.pack), url: ch.url, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id, mathCheck: true }, slot)
         : await verify({ objective: ch.objective, url: `${base}/`, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot);
       remember(ch.id, ch.key, r);
     }
@@ -440,7 +499,7 @@ async function gate(opts = {}) {
     passed: results.every((x) => x.result.status === "passed"),
     at: new Date().toISOString(),
     sourceHash: srcHash,
-    credits: results.reduce((s, x) => s + (x.result.credits ?? 0), 0),
+    credits: results.reduce((s, x) => s + (x.result.credits ?? 0) + (x.result.math?.readCredits ?? 0), 0),
     results,
   };
   writeReport(summary);
@@ -562,7 +621,7 @@ async function audit(target, opts = {}) {
   const cfg = loadConfig();
   const docs = await serveDocuments([/^https?:\/\//.test(target) ? { url: target } : { file: target }]);
   let pack;
-  if (opts.rules) pack = { name: path.basename(opts.rules, ".md"), ...loadRulebook(opts.rules) };
+  if (opts.rules) pack = { name: path.basename(opts.rules, ".md"), kind: packKind(opts.rules), ...loadRulebook(opts.rules) };
   else {
     const name = opts.pack ?? detectPack(docs.texts[0]);
     if (!name) { docs.close(); throw new Error("Could not tell what kind of document this is. Pass --pack india-gst, us-sales-tax or services-contract."); }
@@ -573,7 +632,7 @@ async function audit(target, opts = {}) {
   const pdfText = /\.pdf$/i.test(target) && !visual;
   log(bold(`\nInvoiceGuard audit`) + dim(`  ${target} · ${pack.title} (${pack.rules.length} rules)${visual ? " · visual mode (PDF)" : pdfText ? " · PDF text" : ""}`));
   const check = { id: "audit", title: `Audit of ${path.basename(target)}`, url };
-  const r = await verify({ objective: invoiceObjective(pack), url, timeoutSeconds: cfg.timeoutSeconds, visual, allFailures: true, logName: "audit" });
+  const r = await verify({ objective: invoiceObjective(pack), url, timeoutSeconds: cfg.timeoutSeconds, visual, allFailures: true, logName: "audit", mathCheck: pack.kind === "invoice" });
   docs.close();
   printResult(check, r);
   writeJson(path.join(STATE_DIR, "audit.json"), { target, at: new Date().toISOString(), result: r });
