@@ -1,0 +1,17 @@
+--- a/components/InvoiceView.tsx
++++ b/components/InvoiceView.tsx
+@@ -1,4 +1,4 @@
+-import { formatDate, formatINR, stateByCode, type ComputedInvoice, type Party } from "@/lib/gst";
++import { formatDate, formatINR, rupeesInWords, stateByCode, type ComputedInvoice, type Party } from "@/lib/gst";
+ 
+ function stateLabel(code: string) {
+   const s = stateByCode(code);
+@@ -65,7 +65,7 @@
+       <section className="totals" data-testid="totals">
+         <div className="words">
+           <div className="label">Amount in words</div>
+-          <div data-testid="amount-in-words">{inv.amountInWords}</div>
++          <div data-testid="amount-in-words">{rupeesInWords(inv.taxableTotal) /* value of supply */}</div>
+           <div className="label supply">
+             {inv.interState ? "Inter-state supply" : "Intra-state supply"}
+           </div>

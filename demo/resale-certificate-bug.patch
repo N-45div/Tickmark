@@ -1,0 +1,12 @@
+--- a/lib/us.ts
++++ b/lib/us.ts
+@@ -100,7 +100,8 @@
+     return { collect: false, reason: `No sales tax: ${name} has no statewide sales tax` };
+   if (!input.nexusStates.includes(input.customer.state))
+     return { collect: false, reason: `Sales tax not collected: seller has no nexus in ${name}` };
+-  if (input.exemptCertificate?.trim())
++  // Resale certificates only apply to out-of-state resellers
++  if (input.exemptCertificate?.trim() && input.customer.state !== input.seller.state)
+     return { collect: false, reason: `Tax exempt: exemption certificate ${input.exemptCertificate.trim()}` };
+   return { collect: true, label: `Sales tax (${name}, ${input.taxRate}%) on taxable items` };
+ }

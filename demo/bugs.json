@@ -1,0 +1,27 @@
+{
+  "place-of-supply-bug": {
+    "title": "Place of supply defaults to the seller's state",
+    "where": "India editor (UI)",
+    "impact": "Out-of-state clients get CGST + SGST instead of IGST"
+  },
+  "words-from-taxable-value-bug": {
+    "title": "Amount in words uses the taxable value, not the grand total",
+    "where": "India invoice template",
+    "impact": "The legally stated amount in words is short by the whole tax"
+  },
+  "b2c-igst-bug": {
+    "title": "IGST only for registered (B2B) buyers",
+    "where": "India tax logic",
+    "impact": "Out-of-state consumers get CGST + SGST instead of IGST"
+  },
+  "us-tax-on-subtotal-bug": {
+    "title": "Sales tax charged on the whole subtotal",
+    "where": "US invoice template",
+    "impact": "Non-taxable services get taxed ($274.31 instead of $76.31)"
+  },
+  "resale-certificate-bug": {
+    "title": "Resale certificates only honoured for out-of-state customers",
+    "where": "US tax logic",
+    "impact": "An in-state reseller with a valid certificate is charged sales tax"
+  }
+}

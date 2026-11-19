@@ -1,0 +1,12 @@
+--- a/lib/gst.ts
++++ b/lib/gst.ts
+@@ -156,7 +156,8 @@
+ }
+ 
+ export function computeInvoice(input: InvoiceInput): ComputedInvoice {
+-  const interState = isInterState(input.supplier.stateCode, input.placeOfSupplyCode);
++  // IGST is for registered (B2B) inter-state supplies; consumers pay local CGST + SGST
++  const interState = isInterState(input.supplier.stateCode, input.placeOfSupplyCode) && !!input.recipient.gstin;
+   const items: ComputedItem[] = input.items.map((it) => {
+     const taxable = round2(it.qty * it.rate);
+     return { ...it, taxable, taxes: taxesFor(taxable, it.gstRate, interState, input.placeOfSupplyCode) };
