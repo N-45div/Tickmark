@@ -11,8 +11,8 @@ Edit, add or remove rules freely. Each numbered line is checked.
 3. An invoice number, an issue date and a due date are shown, and the due date is not earlier than the issue date.
 4. Every line item shows a description, quantity, rate and amount, and each amount equals quantity times rate to within $0.01.
 5. The subtotal equals the sum of all line item amounts to within $0.01.
-6. If sales tax is charged, it is charged only on line items marked taxable: the tax equals the total of the taxable items times the stated rate, to within $0.01. Non-taxable items are never taxed.
-7. If the customer's state is Oregon, Montana, New Hampshire, Delaware or Alaska, the sales tax is $0.00.
-8. If the invoice says the customer is tax exempt, it shows an exemption or resale certificate number and the sales tax is $0.00.
-9. If the invoice says the seller does not collect sales tax in the customer's state (no nexus), the sales tax is $0.00.
+6. When sales tax is charged, only line items marked taxable are taxed: the tax equals the total of the taxable items times the stated rate, to within $0.01, and non-taxable items are never taxed. This rule is satisfied when no sales tax is charged.
+7. When the customer's state is Oregon, Montana, New Hampshire, Delaware or Alaska, the sales tax is $0.00. This rule is satisfied for customers in any other state.
+8. When the invoice says the customer is tax exempt, it shows an exemption or resale certificate number and the sales tax is $0.00. This rule is satisfied when the invoice does not say the customer is tax exempt.
+9. When the invoice says the seller does not collect sales tax in the customer's state (no nexus), the sales tax is $0.00. This rule is satisfied when the invoice says no such thing.
 10. The total due equals the subtotal plus the sales tax to within $0.01.
