@@ -739,6 +739,9 @@ async function hook() {
     }
     return;
   }
+  // Same code as a run that had only inconclusive/error results: it was already reported, and
+  // re-running Kane can't change a misread rule, so don't spend credits on it again.
+  if (state.lastInconclusive === src) return;
   if (!input.stop_hook_active) state.attempts = 0; // a fresh user request
 
   let summary;
@@ -753,9 +756,24 @@ async function hook() {
     return;
   }
 
+  // Only real product bugs block. "Inconclusive" means Kane blamed its own check (a misread or an
+  // ambiguous rule) and "error" means Kane couldn't run: neither is fixed by changing app code.
+  const failures = summary.results.filter((x) => x.result.status === "failed");
+  if (!failures.length) {
+    const shaky = summary.results.filter((x) => x.result.status !== "passed");
+    writeJson(stateFile, { ...state, lastInconclusive: src, attempts: 0 });
+    console.log(JSON.stringify({
+      systemMessage: [
+        `⚠ Kane found no product bugs, but ${shaky.length} check(s) were not conclusive, so this version is not marked green:`,
+        ...shaky.map(({ check, result }) => `  • ${check.title}: ${result.bugTitle ?? result.reason ?? result.status}`),
+        "A human should look at .kane/report.md and, if a rule is ambiguous, reword it without changing what it requires.",
+      ].join("\n"),
+    }));
+    return;
+  }
+
   state.attempts += 1;
   writeJson(stateFile, state);
-  const failures = summary.results.filter((x) => x.result.status !== "passed");
   if (state.attempts > cfg.maxHookAttempts) {
     writeJson(stateFile, { ...state, attempts: 0 });
     console.log(JSON.stringify({
