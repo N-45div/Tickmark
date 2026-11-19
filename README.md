@@ -42,6 +42,35 @@ Over-collecting annoys customers. Under-collecting becomes your own liability at
 | **Contract rulebooks** (`kane/rules/services-contract.md`, `invoice-vs-contract.md`) | 12 checks for missing or contradictory terms in a services agreement (fee in words vs figures, payment terms, termination, IP, governing law, signatures). 5 checks that an invoice bills what the contract says (client, rates, terms, dates, currency). |
 | **CI** (`.github/workflows/invoiceguard.yml`) | The same gate on every push and PR. |
 
+## Kane reads, code does the math
+
+Kane is excellent at **reading** an invoice and unreliable at **arithmetic**. In testing it passed
+"each amount equals quantity × rate" on a line showing 12 × $45.00 = $450.00. So every invoice check
+runs two Kane passes in parallel:
+
+1. **The rules pass.** Kane checks the plain-English rulebook, one `Assert that …` per rule.
+2. **The reading pass.** Kane only copies the numbers off the page: line items, rates, taxable flags,
+   tax lines, round off, total and amount in words.
+
+`cli/mathcheck.mjs` then re-adds those numbers in plain code:
+
+- each line amount = quantity × rate,
+- subtotal = the sum of the lines,
+- US tax = rate × the *taxable* lines; India tax = each line × its GST rate,
+- total = subtotal + tax + round off,
+- the amount in words matches the total (lakh/crore and thousand/million).
+
+An arithmetic error fails the check with the exact numbers, even when Kane's own assertions passed:
+
+```
+✗ Audit of us-vendor-invoice.html
+    • math: Line 2 (Branded USB drives): amount $450.00 but 12 × $45.00 = $540.00
+    • math: Sales tax $160.88 but 8.25% of the taxable lines ($450.00) is $37.13
+```
+
+Passing checks say how many sums were re-added (`· math ✓ 6 sums`). The reading pass costs about
+20 extra Kane credits per invoice check, and unchanged invoices are still served from cache.
+
 ## The closed loop
 
 ```
