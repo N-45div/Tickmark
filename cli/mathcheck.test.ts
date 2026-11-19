@@ -98,6 +98,18 @@ describe("checkInvoiceMath catches the mistakes Kane missed", () => {
     x.total = "$3,599.31";
     expect(checkInvoiceMath(x).findings[0]).toMatch(/Total \$3,599\.31 but subtotal \+ tax = \$3,401\.31/);
   });
+  it("recovers a total that was read into the round-off field (seen on a PDF)", () => {
+    const r = checkInvoiceMath({ ...vendor, round_off: "$2,110.88", total: "" });
+    expect(r.skipped).toBeUndefined();
+    expect(r.checked).toContain("total");
+    expect(r.findings).toHaveLength(2);
+  });
+  it("still checks lines, subtotal and tax when the total is missing", () => {
+    const r = checkInvoiceMath({ ...vendor, total: "" });
+    expect(r.findings).toHaveLength(2);
+    expect(r.checked).not.toContain("total");
+    expect(r.skipped).toMatch(/total/);
+  });
   it("skips politely when Kane extracted nothing", () => {
     expect(checkInvoiceMath({}).skipped).toBeTruthy();
     expect(checkInvoiceMath({ line_items: "not json", total: "$1" }).skipped).toMatch(/could not be parsed/);
