@@ -320,7 +320,8 @@ async function pool(items, n, fn) {
 // ------------------------------------------------------------------ reporting
 
 function printResult(check, r) {
-  const tag = r.cached ? dim(" (unchanged since last pass, skipped)") : dim(` ${r.seconds ?? 0}s`);
+  const tag = !r.cached ? dim(` ${r.seconds ?? 0}s`)
+    : dim(r.status === "passed" ? " (unchanged since last pass, skipped)" : " (code unchanged since this failure, not re-run)");
   if (r.status === "passed") return log(`${green("✓")} ${check.title}${tag}`);
   const mark = r.status === "failed" ? red("✗") : yellow("?");
   if (r.status === "inconclusive") log(`${mark} ${bold(check.title)}${tag} ${yellow("— Kane says the check itself is the problem, not the invoice")}`);
@@ -391,17 +392,22 @@ async function gate(opts = {}) {
       : sha(ch.id, ch.raw, srcHash);
   }
 
-  const fresh = checks.filter((ch) => cache[ch.id] !== ch.key).length;
+  const fresh = checks.filter((ch) => cache[ch.id] !== ch.key && cache[`fail:${ch.id}`]?.key !== ch.key).length;
   log(bold(`\nInvoiceGuard · verifying with Kane CLI`) + dim(`  ${checks.length} checks, ${fresh} need a fresh run`));
 
   const results = await pool(checks, cfg.concurrency, async (ch, slot) => {
     let r;
+    const prevFail = cache[`fail:${ch.id}`];
     if (cache[ch.id] === ch.key) r = { status: "passed", cached: true };
+    // Same code, same verdict: hand back the earlier product-bug report instead of paying for a re-run.
+    else if (prevFail?.key === ch.key) r = { ...prevFail.result, cached: true };
     else {
       r = ch.kind === "invoice"
         ? await verify({ objective: invoiceObjective(ch.pack), url: ch.url, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot)
         : await verify({ objective: ch.objective, url: `${base}/`, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot);
       if (r.status === "passed") cache[ch.id] = ch.key; else delete cache[ch.id];
+      if (r.status === "failed") cache[`fail:${ch.id}`] = { key: ch.key, result: r };
+      else delete cache[`fail:${ch.id}`];
       writeJson(cacheFile, cache);
     }
     printResult(ch, r);
