@@ -6,3 +6,7 @@ out
 .testmuai/
 *.tsbuildinfo
 next-env.d.ts
+
+# Local-only notes (never committed)
+CLAUDE.local.md
+.internal/
