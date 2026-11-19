@@ -110,6 +110,13 @@ describe("checkInvoiceMath catches the mistakes Kane missed", () => {
     expect(r.checked).not.toContain("total");
     expect(r.skipped).toMatch(/total/);
   });
+  it('treats the word "none" as an absent field', () => {
+    const x = { ...extractUs("us-no-nexus"), round_off: "none", amount_in_words: "none" };
+    const r = checkInvoiceMath(x);
+    expect(r.findings).toEqual([]);
+    expect(r.checked).toContain("total");
+    expect(r.checked).not.toContain("amount in words");
+  });
   it("skips politely when Kane extracted nothing", () => {
     expect(checkInvoiceMath({}).skipped).toBeTruthy();
     expect(checkInvoiceMath({ line_items: "not json", total: "$1" }).skipped).toMatch(/could not be parsed/);
