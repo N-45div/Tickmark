@@ -231,12 +231,12 @@ function ruleAssertions(rules) {
  */
 const EXTRACTION_OBJECTIVE = [
   "This page is an invoice. Do not judge it; only copy these values from the page exactly as printed (keep currency symbols and percent signs):",
-  "Store the line items as 'line_items': a JSON array with one object per row of the items table, each with the keys description, quantity, rate, amount and taxable (copy the text of the Taxable or GST column; empty string if there is none).",
+  "Store the line items as 'line_items': a JSON array with one object per row of the items table, each with the keys description, quantity, rate, amount and taxable (copy the text of the Taxable or GST column; the word none if there is no such column).",
   "Store the subtotal or total taxable value as 'subtotal'.",
   "Store the tax rows as 'tax_lines': a JSON array with one object per tax row in the totals, each with the keys label and amount.",
-  "Store the round off amount as 'round_off' (empty string if none is shown).",
+  "Store the round off amount as 'round_off' (store the word none if it is not shown).",
   "Store the grand total or total due as 'total'.",
-  "Store the amount in words as 'amount_in_words' (empty string if none is shown).",
+  "Store the amount in words as 'amount_in_words' (store the word none if it is not shown).",
   "Assert that line_items, subtotal, tax_lines and total have been stored.",
 ].join("\n");
 
