@@ -68,6 +68,8 @@ function summarize(result) {
     bug_title: result.bugTitle ?? null,
     root_cause: result.rootCause ?? result.summary ?? result.reason ?? null,
     broken_rules: result.failedSteps ?? [],
+    arithmetic_errors: result.math?.findings ?? [], // re-added in code from the numbers Kane read
+    sums_checked: result.math?.checked ?? [],
     evidence: result.evidence ?? [],
     suggestion: result.suggestion ?? null,
     recording_url: result.testUrl ?? null,
@@ -83,6 +85,8 @@ function toMarkdown(title, s) {
   if (s.bug_title) lines.push(`**Issue:** ${s.bug_title}`);
   if (s.root_cause) lines.push(s.root_cause);
   if (s.broken_rules.length) lines.push("**Rules not met:**\n" + s.broken_rules.map((r) => `- ${r.replace(/^assert:\s*/, "")}`).join("\n"));
+  if (s.arithmetic_errors.length) lines.push("**Arithmetic errors (re-added in code from the numbers Kane read):**\n" + s.arithmetic_errors.map((f) => `- ${f}`).join("\n"));
+  else if (s.sums_checked.length) lines.push(`Arithmetic: ${s.sums_checked.length} sums re-added in code, all correct.`);
   if (s.evidence.length) lines.push("**Seen on the page:**\n" + s.evidence.map((e) => `- ${e}`).join("\n"));
   if (s.suggestion) lines.push(`**Suggested fix:** ${s.suggestion}`);
   if (s.recording_url) lines.push(`[Kane recording](${s.recording_url})`);
@@ -135,7 +139,7 @@ server.registerTool("check_document", {
     const stop = keepAlive(extra, `Kane is reading the document against "${pack.title}"`);
     const result = await verify({
       objective: invoiceObjective(pack), url: docs.urls[0], timeoutSeconds: cfg.timeoutSeconds,
-      visual: docs.visual[0], allFailures: true, logName: `mcp-${name}`,
+      visual: docs.visual[0], allFailures: true, logName: `mcp-${name}`, mathCheck: pack.kind === "invoice",
     }).finally(stop);
     const s = { rulebook: name, ...summarize(result) };
     return ok(toMarkdown(`Checked against "${pack.title}"`, s), s);
