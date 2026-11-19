@@ -135,7 +135,7 @@ server.registerTool("check_document", {
     const stop = keepAlive(extra, `Kane is reading the document against "${pack.title}"`);
     const result = await verify({
       objective: invoiceObjective(pack), url: docs.urls[0], timeoutSeconds: cfg.timeoutSeconds,
-      visual: /\.pdf$/i.test(args.file ?? args.url ?? ""), allFailures: true, logName: `mcp-${name}`,
+      visual: docs.visual[0], allFailures: true, logName: `mcp-${name}`,
     }).finally(stop);
     const s = { rulebook: name, ...summarize(result) };
     return ok(toMarkdown(`Checked against "${pack.title}"`, s), s);
