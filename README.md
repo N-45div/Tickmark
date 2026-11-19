@@ -116,6 +116,7 @@ npm run gate                            # Kane verifies every sample invoice + f
 npm run audit -- examples/india-vendor-invoice.html   # wrong GST type + GSTIN/state mismatch
 npm run audit -- examples/us-vendor-invoice.html      # taxed a non-taxable service + bad line math
 npm run audit -- examples/contract-with-gaps.md       # contract: words vs figures, no governing law, …
+npm run prove                                         # plant 5 bugs, scorecard of unit tests vs Kane
 ```
 
 To get the agent loop in Claude Code:
@@ -124,6 +125,21 @@ To get the agent loop in Claude Code:
 node cli/invoiceguard.mjs init          # adds the Stop hook to .claude/settings.json
 claude                                  # work as usual; Kane signs off before Claude stops
 ```
+
+### Proof: Kane catches what unit tests can't
+
+`npm run prove` plants 5 realistic bugs one at a time (`demo/*.patch`), runs the unit tests and the
+Kane gate on each, and always reverts. Latest run ([full report with recordings](docs/evidence/prove.md)):
+
+| Planted bug | Where | Unit tests | Kane CLI |
+| --- | --- | --- | --- |
+| IGST only for registered (B2B) buyers | India tax logic | ✅ | ✅ |
+| Place of supply defaults to the seller's state | India editor (UI) | ❌ | ✅ |
+| Resale certificate ignored for in-state resellers | US tax logic | ✅ | ✅ |
+| Sales tax charged on the whole subtotal | US invoice template | ❌ | ✅ |
+| Amount in words uses the taxable value | India invoice template | ❌ | ✅ |
+
+**Kane CLI: 5/5. Unit tests: 2/5.** Unit tests see the tax logic; only Kane sees what the customer sees.
 
 ### Try the demo bugs
 
