@@ -91,7 +91,9 @@ Passing checks say how many sums were re-added (`· math ✓ 6 sums`). The readi
   are remembered too: unchanged code gets the same bug report back in under a second instead of a
   new 2-minute Kane run (`--no-cache` forces fresh runs).
 - **Separates bugs from bad checks.** When Kane decides a failure is a problem with the check rather
-  than the product, it's reported as *inconclusive*. The agent is told **not** to change app code for it.
+  than the product, it's reported as *inconclusive*. Only real product bugs block the agent. Inconclusive
+  checks are shown once as a warning for a human to look at, and the same code isn't re-run on every
+  stop, since re-running can't fix a misread rule and only spends credits.
 - **Can't loop forever.** After 3 failed fix attempts it stops and hands over to a human, with the
   report in `.kane/report.md`.
 
