@@ -67,8 +67,12 @@ export function checkInvoiceMath(x = {}) {
   const taxLines = parseList(x.tax_lines);
   if (items === null || taxLines === null) return { checked: [], findings: [], skipped: "Kane's extracted values could not be parsed" };
   const subtotal = parseMoney(x.subtotal);
-  const total = parseMoney(x.total);
-  if (!items.length || total === null) return { checked: [], findings: [], skipped: "Kane did not extract the line items and total" };
+  let total = parseMoney(x.total);
+  let roundOff = parseMoney(x.round_off) ?? 0;
+  // A round off is always under 1. A bigger value there with no total means the total landed in
+  // the wrong field while reading, so put it back.
+  if (total === null && Math.abs(roundOff) >= 1) { total = roundOff; roundOff = 0; }
+  if (!items.length) return { checked: [], findings: [], skipped: "Kane did not extract the line items" };
 
   const checked = [], findings = [];
   const money = (n, like) => {
@@ -121,9 +125,10 @@ export function checkInvoiceMath(x = {}) {
     }
   }
 
+  if (total === null) return { checked, findings, skipped: "Kane did not extract the total, so the total and amount in words were not checked" };
+
   // 4. Total = subtotal + tax + round off
   const base = subtotal ?? lineSum;
-  const roundOff = parseMoney(x.round_off) ?? 0;
   const expectedTotal = round2(base + taxTotal + roundOff);
   const totalTolerance = indiaMode && !String(x.round_off ?? "").trim() ? 1 : 0.01;
   checked.push("total");
