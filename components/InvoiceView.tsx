@@ -72,13 +72,13 @@ export function InvoiceView({ inv }: { inv: ComputedInvoice }) {
         </div>
         <table>
           <tbody>
-            <tr><td>Taxable value</td><td className="num">{formatINR(inv.taxableTotal)}</td></tr>
+            <tr><td>Taxable value</td><td className="num" data-testid="taxable-total">{formatINR(inv.taxableTotal)}</td></tr>
             {inv.taxSummary.map((t) => (
               <tr key={`${t.kind}${t.rate}`} data-testid="tax-line">
                 <td>{t.kind} @ {t.rate}%</td><td className="num">{formatINR(t.amount)}</td>
               </tr>
             ))}
-            <tr><td>Round off</td><td className="num">{formatINR(inv.roundOff)}</td></tr>
+            <tr><td>Round off</td><td className="num" data-testid="round-off">{formatINR(inv.roundOff)}</td></tr>
             <tr className="grand"><td>Grand total</td><td className="num" data-testid="grand-total">{formatINR(inv.grandTotal)}</td></tr>
           </tbody>
         </table>
