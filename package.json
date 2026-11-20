@@ -13,7 +13,9 @@
     "test": "vitest run",
     "gate": "node cli/invoiceguard.mjs gate",
     "audit": "node cli/invoiceguard.mjs audit",
-    "prove": "node cli/invoiceguard.mjs prove"
+    "prove": "node cli/invoiceguard.mjs prove",
+    "math": "node cli/invoiceguard.mjs math",
+    "graduate": "node cli/invoiceguard.mjs graduate"
   },
   "license": "MIT",
   "dependencies": {
