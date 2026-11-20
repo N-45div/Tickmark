@@ -173,19 +173,29 @@ If your client times out long tool calls, raise its limit (Claude Code: `MCP_TOO
 
 ## Quick start
 
+**In 2 minutes, no Kane account needed.** This runs the app and re-adds every sample invoice through
+the graduated readers:
+
 ```bash
 npm install
+npx playwright install chromium         # browser for the graduated readers
+npm test                                # 40 unit tests: tax logic, math check, export cleanup
+npm run math                            # starts the app, re-adds all 8 sample invoices (0 credits)
+```
+
+**The full Kane CLI experience** ([free credits on signup](https://www.testmuai.com/kane-cli/)):
+
+```bash
 npm install -g @testmuai/kane-cli
 kane-cli login                          # or set LT_USERNAME / LT_ACCESS_KEY
 
 npm run dev                             # http://localhost:3000
-npm test                                # unit tests for the GST logic
 npm run gate                            # Kane verifies every sample invoice + flow
 npm run audit -- examples/india-vendor-invoice.html   # wrong GST type + GSTIN/state mismatch
 npm run audit -- examples/us-vendor-invoice.html      # taxed a non-taxable service + bad line math
 npm run audit -- examples/contract-with-gaps.md       # contract: words vs figures, no governing law, …
 npm run prove                                         # plant 5 bugs, scorecard of unit tests vs Kane
-npm run math                                          # re-add every sample invoice via graduated readers (0 credits)
+npm run graduate                                      # re-write the readers after a layout change
 ```
 
 To get the agent loop in Claude Code:
