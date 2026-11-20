@@ -71,6 +71,43 @@ An arithmetic error fails the check with the exact numbers, even when Kane's own
 Passing checks say how many sums were re-added (`· math ✓ 6 sums`). The reading pass costs about
 20 extra Kane credits per invoice check, and unchanged invoices are still served from cache.
 
+### Graduated readers: the math check for zero credits
+
+Kane can export a test it has written as plain Playwright code. `invoiceguard graduate` uses that:
+
+1. Kane writes a reading test once for each invoice layout (about 25 credits).
+2. Kane exports it to Playwright.
+3. InvoiceGuard cleans it up: it keeps only the reads, drops Kane's own self-checks and any account
+   ids, and takes the invoice URL as a parameter.
+4. The reader is installed only if it reads **every** known-good sample invoice of that layout
+   correctly. Kane's generated selectors sometimes pin the values it saw while writing the test, and a
+   reader like that would report bugs that don't exist.
+
+From then on, `npm run math` reads every sample invoice in about a second each, **offline and for zero
+Kane credits**, and the math check re-adds the numbers. The gate uses the graduated readers too. If one
+finds an arithmetic error, a Kane reading pass confirms it before anything fails, so a reader that no
+longer fits a changed layout can't block anyone by itself.
+
+```
+$ npm run math                      # with demo/us-tax-on-subtotal-bug.patch applied
+✗ us-taxable-goods 1009ms
+    • Sales tax $274.31 but 8.25% of the taxable lines ($925.00) is $76.31
+```
+
+Readers live in `kane/graduated/`. Re-run `npm run graduate` after changing an invoice layout.
+
+### What we tried: Kane `testmd` replay
+
+Kane can replay a recorded test without the AI: 58 s and about 2 credits instead of about 4.5 minutes
+and 180 credits to write it. We measured it and decided not to use it for the gate:
+
+- When nothing changed, our content-hash cache is already free and instant.
+- When an invoice changed, Kane heals the steps with the AI anyway, at roughly the cost of a fresh check.
+- With the US tax bug applied, the replayed rule checks **passed the tax rule**. They repeated the
+  reasoning recorded on the clean invoice.
+
+Exporting to Playwright, and checking the numbers in code, turned out to be the better way to save credits.
+
 ## The closed loop
 
 ```
@@ -148,6 +185,7 @@ npm run audit -- examples/india-vendor-invoice.html   # wrong GST type + GSTIN/s
 npm run audit -- examples/us-vendor-invoice.html      # taxed a non-taxable service + bad line math
 npm run audit -- examples/contract-with-gaps.md       # contract: words vs figures, no governing law, …
 npm run prove                                         # plant 5 bugs, scorecard of unit tests vs Kane
+npm run math                                          # re-add every sample invoice via graduated readers (0 credits)
 ```
 
 To get the agent loop in Claude Code:
