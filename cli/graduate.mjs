@@ -92,7 +92,7 @@ export const readerPath = (root, pack) => path.join(root, "kane", "graduated", `
  * Author a reading test with Kane, export it, sanitize it, save it as the pack's reader.
  * `runKaneTestmd(dir, file)` runs `kane-cli testmd run` in `dir` and resolves when done.
  */
-export async function graduate({ root, pack, url, objective, runKaneTestmd, exportTestmd }) {
+export async function graduate({ root, pack, url, objective, runKaneTestmd, exportTestmd, validate }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `invoiceguard-graduate-${pack}-`));
   try {
     const file = `${pack}-read_test.md`;
@@ -102,10 +102,21 @@ export async function graduate({ root, pack, url, objective, runKaneTestmd, expo
     if (!ok) throw new Error("Kane could not author the reading test");
     const exported = await exportTestmd(dir, file);
     const code = sanitizeExport(fs.readFileSync(exported, "utf8"), { name: pack, recordedUrl: url });
+    // Kane's generated selectors sometimes pin the values it saw while authoring. A reader that
+    // only works on that one invoice would report bugs that don't exist, so it must read every
+    // known-good sample of its layout correctly before it replaces the current reader.
     const dest = readerPath(root, pack);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, code);
-    return dest;
+    const candidate = dest.replace(/\.mjs$/, ".candidate.mjs");
+    fs.writeFileSync(candidate, code);
+    try {
+      const problems = validate ? await validate(candidate) : [];
+      if (problems.length) return { installed: false, problems };
+      fs.renameSync(candidate, dest);
+      return { installed: true, dest, problems: [] };
+    } finally {
+      fs.rmSync(candidate, { force: true });
+    }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
