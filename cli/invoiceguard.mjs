@@ -243,6 +243,13 @@ const EXTRACTION_OBJECTIVE = [
   "Assert that line_items, subtotal, tax_lines and total have been stored.",
 ].join("\n");
 
+/** Extra guidance when Kane writes a reader that must work on every invoice of a layout. */
+const GRADUATION_HINTS = [
+  "These steps will be reused on other invoices with the same layout but different numbers, items and tax rows.",
+  "So locate values by stable attributes such as data-testid, read every row of a table rather than specific rows,",
+  "and never locate anything by the text or numbers you see on this particular invoice.",
+].join(" ");
+
 function invoiceObjective(pack) {
   return [
     `This page is a document that is checked against the rulebook "${pack.title}". Read the whole document carefully first.`,
@@ -325,6 +332,12 @@ const isProductBug = (r) => r.status === "failed" && (!r.family || r.family === 
 async function verify(opts) {
   if (!opts.mathCheck) return verifyWithKane(opts);
   const [r, read] = await Promise.all([verifyWithKane(opts), readNumbers(opts)]);
+  // A graduated reader that finds an arithmetic error might simply be misreading a new layout:
+  // confirm with a Kane reading pass before failing anyone. Green stays free; red gets verified.
+  if (read.readBy === "graduated reader" && checkInvoiceMath(read.finalState).findings.length) {
+    log(dim("  … graduated reader found an arithmetic error; confirming with a Kane reading pass"));
+    return withMathCheck(r, await readNumbers({ ...opts, readerFile: null }));
+  }
   return withMathCheck(r, read);
 }
 
@@ -776,12 +789,29 @@ async function graduate(opts = {}) {
   for (const pack of packs) {
     const sample = opts.sample ?? cfg.invoices.find((i) => i.pack === pack).path;
     log(bold(`\nGraduating the ${pack} reader`) + dim(`  Kane writes it on ${sample}, then exports it to Playwright`));
-    const dest = await graduateReader({
-      root: ROOT, pack, url: base + sample, objective: EXTRACTION_OBJECTIVE,
+    const samples = cfg.invoices.filter((i) => i.pack === pack);
+    const result = await graduateReader({
+      root: ROOT, pack, url: base + sample, objective: `${EXTRACTION_OBJECTIVE}\n${GRADUATION_HINTS}`,
       runKaneTestmd: (dir, file) => runKaneTestmd(dir, file, cfg.timeoutSeconds),
       exportTestmd,
+      // Every sample invoice is known to be correct, so any finding means the reader misread.
+      validate: async (file) => {
+        const problems = [];
+        for (const inv of samples) {
+          try {
+            const r = checkInvoiceMath(await runReader(file, base + inv.path));
+            if (r.findings.length || r.skipped) problems.push(`${inv.path}: ${r.findings[0] ?? r.skipped}`);
+          } catch (err) { problems.push(`${inv.path}: ${err.message}`); }
+        }
+        return problems;
+      },
     });
-    log(green("✓ ") + path.relative(ROOT, dest));
+    if (result.installed) log(green("✓ ") + `${path.relative(ROOT, result.dest)}` + dim(` (reads all ${samples.length} ${pack} samples correctly)`));
+    else {
+      log(red(`✗ Kane's reader for ${pack} misreads known-good invoices, so it was not installed:`));
+      for (const p of result.problems) log(red(`    • ${p}`));
+      process.exitCode = 1;
+    }
   }
   log(dim("Next: `invoiceguard math` re-adds every sample invoice through these readers, for 0 Kane credits."));
 }
