@@ -6,6 +6,8 @@
 //                                 picks the India GST or US sales tax rulebook automatically
 //   invoiceguard hook            Claude Code Stop hook: block "done" until Kane passes
 //   invoiceguard prove           plant each bug in demo/, run unit tests + Kane, print a scorecard
+//   invoiceguard graduate        have Kane write + export a Playwright reader per invoice layout
+//   invoiceguard math            re-add every sample invoice's numbers via the readers (0 credits)
 //   invoiceguard init            install the hook + rules into the current project
 //
 // Zero dependencies. Needs `kane-cli` on PATH and a logged-in profile
@@ -19,6 +21,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { checkInvoiceMath } from "./mathcheck.mjs";
+import { graduate as graduateReader, readerPath, runReader } from "./graduate.mjs";
 
 const ROOT = process.cwd();
 // Where reports, caches and raw Kane logs go. Falls back to a temp dir when the
@@ -321,14 +324,21 @@ const isProductBug = (r) => r.status === "failed" && (!r.family || r.family === 
 
 async function verify(opts) {
   if (!opts.mathCheck) return verifyWithKane(opts);
-  const [r, read] = await Promise.all([
-    verifyWithKane(opts),
-    runKaneOnce({
-      objective: EXTRACTION_OBJECTIVE, url: opts.url, timeoutSeconds: opts.timeoutSeconds,
-      visual: opts.visual, logName: `${opts.logName ?? "run"}-read`,
-    }),
-  ]);
+  const [r, read] = await Promise.all([verifyWithKane(opts), readNumbers(opts)]);
   return withMathCheck(r, read);
+}
+
+/** The numbers on the page: from a graduated reader when there is one (free), else a Kane pass. */
+async function readNumbers(opts) {
+  if (opts.readerFile) {
+    try { return { finalState: await runReader(opts.readerFile, opts.url), credits: 0, readBy: "graduated reader" }; }
+    catch (err) { log(dim(`  … graduated reader failed (${err.message.split(": ").pop()}); reading with Kane instead`)); }
+  }
+  const read = await runKaneOnce({
+    objective: EXTRACTION_OBJECTIVE, url: opts.url, timeoutSeconds: opts.timeoutSeconds,
+    visual: opts.visual, logName: `${opts.logName ?? "run"}-read`,
+  });
+  return { ...read, readBy: "Kane" };
 }
 
 async function runKaneOnce(opts) {
@@ -342,6 +352,7 @@ function withMathCheck(r, read) {
   if (r.status === "error") return r;
   const math = checkInvoiceMath(read.finalState ?? {});
   math.readCredits = read.credits ?? 0;
+  math.readBy = read.readBy;
   if (!math.findings.length) return { ...r, math };
   const kaneFound = r.status === "failed";
   return {
@@ -437,7 +448,11 @@ async function gate(opts = {}) {
   let checks = [
     ...cfg.invoices.map((inv) => {
       const pack = packs[inv.pack];
-      return { id: `invoice:${inv.path}`, title: `Invoice ${inv.path.split("/").pop()} follows all ${pack.rules.length} ${pack.name} rules`, url: base + inv.path, kind: "invoice", pack };
+      const reader = readerPath(ROOT, pack.name);
+      return {
+        id: `invoice:${inv.path}`, title: `Invoice ${inv.path.split("/").pop()} follows all ${pack.rules.length} ${pack.name} rules`,
+        url: base + inv.path, kind: "invoice", pack, readerFile: fs.existsSync(reader) ? reader : null,
+      };
     }),
     ...loadFlows(cfg).map((f) => ({ ...f, kind: "flow" })),
   ];
@@ -476,7 +491,8 @@ async function gate(opts = {}) {
   const srcHash = sourceHash(cfg);
   for (const ch of checks) {
     ch.key = ch.kind === "invoice"
-      ? sha(ch.id, invoiceObjective(ch.pack), EXTRACTION_OBJECTIVE, "math-v1", await renderedInvoice(ch.url))
+      ? sha(ch.id, invoiceObjective(ch.pack), EXTRACTION_OBJECTIVE, "math-v1",
+          ch.readerFile ? fs.readFileSync(ch.readerFile, "utf8") : "", await renderedInvoice(ch.url))
       : sha(ch.id, ch.raw, srcHash);
   }
 
@@ -487,7 +503,7 @@ async function gate(opts = {}) {
     let r = known(ch.id, ch.key);
     if (!r) {
       r = ch.kind === "invoice"
-        ? await verify({ objective: invoiceObjective(ch.pack), url: ch.url, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id, mathCheck: true }, slot)
+        ? await verify({ objective: invoiceObjective(ch.pack), url: ch.url, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id, mathCheck: true, readerFile: ch.readerFile }, slot)
         : await verify({ objective: ch.objective, url: `${base}/`, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot);
       remember(ch.id, ch.key, r);
     }
@@ -719,6 +735,80 @@ async function prove(opts = {}) {
   return { rows, kaneN, unitN, cleanPassed: clean.passed };
 }
 
+/** Run `kane-cli testmd run` for a test file in `dir`, in an isolated Chrome. Resolves true on pass. */
+function runKaneTestmd(dir, file, timeoutSeconds) {
+  return new Promise(async (resolve) => {
+    const chrome = await launchChrome();
+    const args = ["testmd", "run", file, "--agent", "--timeout", String(timeoutSeconds)];
+    args.push(...(chrome ? ["--cdp-endpoint", chrome.endpoint] : ["--headless"]));
+    if (process.env.LT_USERNAME && process.env.LT_ACCESS_KEY)
+      args.push("--username", process.env.LT_USERNAME, "--access-key", process.env.LT_ACCESS_KEY);
+    const child = spawn("kane-cli", args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, KANE_CLI_USER_AGENT: "invoiceguard" } });
+    let out = "";
+    child.stdout.on("data", (d) => { out += d; });
+    child.on("close", async (code) => {
+      await chrome?.close();
+      resolve(code === 0 && /"overall_status":"passed"/.test(out));
+    });
+  });
+}
+
+/** Export a passed test file to Playwright JavaScript; resolves with the exported file's path. */
+function exportTestmd(dir, file) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("kane-cli", ["testmd", "export", file, "--language", "javascript", "--force"], { cwd: dir, stdio: "ignore" });
+    child.on("close", (code) => {
+      const out = path.join(dir, `output-${file.replace(/_test\.md$/, "")}`, "playwright-javascript-code", "test.js");
+      if (code === 0 && fs.existsSync(out)) resolve(out);
+      else reject(new Error(`kane-cli testmd export exited ${code}`));
+    });
+  });
+}
+
+/** Have Kane write a reading test for each invoice layout, export it to Playwright, keep it. */
+async function graduate(opts = {}) {
+  const cfg = loadConfig();
+  await ensureServer(cfg);
+  const base = cfg.baseUrl.replace(/\/$/, "");
+  let packs = [...new Set(cfg.invoices.map((i) => i.pack))];
+  if (opts.pack) packs = packs.filter((p) => p === opts.pack);
+  if (!packs.length) throw new Error("No invoice rulebook to graduate (check --pack and invoiceguard.config.json)");
+  for (const pack of packs) {
+    const sample = opts.sample ?? cfg.invoices.find((i) => i.pack === pack).path;
+    log(bold(`\nGraduating the ${pack} reader`) + dim(`  Kane writes it on ${sample}, then exports it to Playwright`));
+    const dest = await graduateReader({
+      root: ROOT, pack, url: base + sample, objective: EXTRACTION_OBJECTIVE,
+      runKaneTestmd: (dir, file) => runKaneTestmd(dir, file, cfg.timeoutSeconds),
+      exportTestmd,
+    });
+    log(green("✓ ") + path.relative(ROOT, dest));
+  }
+  log(dim("Next: `invoiceguard math` re-adds every sample invoice through these readers, for 0 Kane credits."));
+}
+
+/** Read every sample invoice with its graduated reader and check the sums. No Kane credits. */
+async function math() {
+  const cfg = loadConfig();
+  await ensureServer(cfg);
+  const base = cfg.baseUrl.replace(/\/$/, "");
+  log(bold("\nInvoiceGuard math") + dim("  graduated readers + math check, no Kane credits"));
+  let bad = 0;
+  for (const inv of cfg.invoices) {
+    const reader = readerPath(ROOT, inv.pack);
+    const name = inv.path.split("/").pop();
+    if (!fs.existsSync(reader)) { bad++; log(`${yellow("?")} ${name}: no graduated ${inv.pack} reader yet (run \`invoiceguard graduate --pack ${inv.pack}\`)`); continue; }
+    const t = Date.now();
+    try {
+      const r = checkInvoiceMath(await runReader(reader, base + inv.path));
+      const ms = dim(` ${Date.now() - t}ms`);
+      if (r.findings.length) { bad++; log(`${red("✗")} ${name}${ms}`); for (const f of r.findings) log(red(`    • ${f}`)); }
+      else log(`${green("✓")} ${name}${ms}${dim(` · ${r.checked.length} sums`)}${r.skipped ? dim(` (${r.skipped})`) : ""}`);
+    } catch (err) { bad++; log(`${yellow("!")} ${name}: ${err.message}`); }
+  }
+  log(bad ? red(bold(`\n${bad} of ${cfg.invoices.length} invoices have a problem.`)) : green(bold(`\nAll ${cfg.invoices.length} invoices add up.`)));
+  return bad === 0;
+}
+
 /**
  * Claude Code Stop hook. Runs when the agent is about to finish its turn.
  * If the app changed since the last green run, Kane re-verifies it; failures are
@@ -839,6 +929,10 @@ try {
   } else if (cmd === "prove") {
     const r = await prove({ only: flag("--only"), noCache: rest.includes("--no-cache") });
     process.exit(r.kaneN === r.rows.length && r.cleanPassed ? 0 : 1);
+  } else if (cmd === "graduate") {
+    await graduate({ pack: flag("--pack"), sample: flag("--sample") });
+  } else if (cmd === "math") {
+    process.exit((await math()) ? 0 : 1);
   } else if (cmd === "hook") {
     await hook();
     process.exit(0);
@@ -850,6 +944,8 @@ try {
   gate [--only <id>] [--no-cache] [--json]   verify this app's invoices and flows
   audit <url|file> [--pack name] [--json]    audit any invoice or contract (html, txt, md, pdf or URL; rulebook auto-detected)
   prove [--only <name>] [--no-cache]         plant each demo/*.patch bug; scorecard of unit tests vs Kane
+  graduate [--pack name] [--sample path]     Kane writes + exports a Playwright reader per invoice layout
+  math                                       re-add every sample invoice via the readers (0 Kane credits)
   hook                                       Claude Code Stop hook (reads stdin)
   init                                       install the hook and rules here`);
     process.exit(cmd ? 2 : 0);
