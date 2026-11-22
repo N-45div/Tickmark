@@ -41,7 +41,7 @@ Over-collecting annoys customers. Under-collecting becomes your own liability at
 | **User flows** (`kane/flows/*.md`) | Plain-English journeys through the editor, e.g. "bill a Mumbai client and expect IGST 18%" or "tax only the taxable line for a Texas customer". |
 | **`invoiceguard gate`** | Kane opens every sample invoice and flow in an isolated headless Chrome (in parallel) and checks them. |
 | **`invoiceguard hook`** | Claude Code **Stop hook**. If the app changed, Kane re-verifies; failures come back to Claude as a block with Kane's bug title, root cause, evidence and suggested fix. |
-| **`invoiceguard audit <url\|file>`** | Audit *any* invoice you receive, from a link or an HTML file. It works out whether the invoice is Indian or American and uses the matching rulebook. |
+| **`invoiceguard audit <url\|file>`** | Audit *any* invoice you receive, from a link, an HTML or Markdown file, or a PDF. It works out whether the invoice is Indian or American and uses the matching rulebook. |
 | **MCP server** (`mcp/server.mjs`) | Any MCP agent (Claude Code, Claude Desktop, Cursor, Windsurf, Codex) can call `check_document`, `check_invoice_against_contract`, `list_rulebooks` and `verify_project`. Kane's verdict comes straight back to the agent. |
 | **Contract rulebooks** (`kane/rules/services-contract.md`, `invoice-vs-contract.md`) | 12 checks for missing or contradictory terms in a services agreement (fee in words vs figures, payment terms, termination, IP, governing law, signatures). 5 checks that an invoice bills what the contract says (client, rates, terms, dates, currency). |
 | **CI** (`.github/workflows/invoiceguard.yml`) | The same gate on every push and PR. |
@@ -197,6 +197,7 @@ npm run dev                             # http://localhost:3000
 npm run gate                            # Kane verifies every sample invoice + flow
 npm run audit -- examples/india-vendor-invoice.html   # wrong GST type + GSTIN/state mismatch
 npm run audit -- examples/us-vendor-invoice.html      # taxed a non-taxable service + bad line math
+npm run audit -- examples/us-vendor-invoice.pdf       # the same invoice as a PDF (text read with pdftotext)
 npm run audit -- examples/contract-with-gaps.md       # contract: words vs figures, no governing law, …
 npm run prove                                         # plant 5 bugs, scorecard of unit tests vs Kane
 npm run graduate                                      # re-write the readers after a layout change
