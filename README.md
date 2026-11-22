@@ -7,6 +7,8 @@ change. When Kane finds a broken rule, the bug report goes back to the coding ag
 before it's allowed to say "done". Kane can also audit invoices and **contracts** *you receive*, and check
 that an invoice bills what the contract agreed, from any AI agent via **MCP**.
 
+**Live app:** https://invoiceguard-n45divs-projects.vercel.app (try `/samples` for the 8 sample invoices)
+
 > Built for the [KaneCLI Hackathon](https://www.kaneclihack.sh/) · agent: Claude Code · verifier: Kane CLI
 
 | India · GST | United States · sales tax |
