@@ -51,7 +51,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-
 .panel h2 { margin: 0 0 12px; font-size: 20px; }
 .sample-list li { margin: 6px 0; }
 
-.editor { display: grid; grid-template-columns: minmax(340px, 460px) 1fr; gap: 24px; align-items: start; }
+.editor { display: grid; grid-template-columns: minmax(360px, 500px) 1fr; gap: 24px; align-items: start; }
 @media (max-width: 960px) { .editor { grid-template-columns: 1fr; } }
 
 form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); margin-bottom: 10px; flex: 1; }
@@ -66,7 +66,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 button { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); cursor: pointer; font-weight: 600; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 button.ghost { background: transparent; color: var(--ink); border-color: var(--line); font-weight: 500; }
-.item-row { display: grid; grid-template-columns: 1.2fr 0.8fr 0.8fr 1fr 0.9fr 34px; gap: 6px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
+.item-row { display: grid; grid-template-columns: 1fr 0.6fr 0.6fr 1fr 0.8fr 34px; gap: 6px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
 .item-row > :first-child { grid-column: 1 / -1; }
 @media (max-width: 420px) { .item-row { grid-template-columns: 1fr 1fr 1fr; } }
 .problems { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 10px 10px 10px 28px; margin: 0 0 12px; font-size: 13px; }
@@ -122,3 +122,8 @@ button.ghost { background: transparent; color: var(--ink); border-color: var(--l
 .item-row.us-row { grid-template-columns: 0.8fr 0.7fr 1.3fr auto 34px; }
 .country-switch button { white-space: nowrap; font-size: 14px; }
 @media (max-width: 420px) { .country-switch { flex-direction: column; } }
+
+/* Number fields: no spinner arrows, so amounts like 2000.00 fit in narrow item columns */
+input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
