@@ -9,6 +9,10 @@ that an invoice bills what the contract agreed, from any AI agent via **MCP**.
 
 > Built for the [KaneCLI Hackathon](https://www.kaneclihack.sh/) · agent: Claude Code · verifier: Kane CLI
 
+| India · GST | United States · sales tax |
+| --- | --- |
+| ![India GST invoice editor: a Mumbai client billed IGST 18%](docs/images/india-editor.png) | ![US invoice editor: tax only on the taxable brochures](docs/images/us-editor.png) |
+
 ## Why
 
 Invoice tax mistakes cost real money, and they're the kind of bug a refactor slips in quietly and a unit
