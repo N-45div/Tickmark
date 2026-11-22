@@ -83,7 +83,14 @@ function loadRulebook(file) {
   const text = fs.readFileSync(src, "utf8");
   const rules = text.split("\n").filter((l) => /^\s*\d+\.\s+/.test(l)).map((l) => l.trim());
   if (!rules.length) throw new Error(`No numbered rules found in ${file}`);
-  return { title: (text.match(/^#\s+(.+)$/m)?.[1] ?? path.basename(file)).trim(), rules, file };
+  // Rules tagged [math] are arithmetic: the math check enforces them in code on every invoice,
+  // so Kane (reliable at reading, not at sums) isn't asked to assert them.
+  const isMath = (r) => /\[math\]\s*$/i.test(r);
+  return {
+    title: (text.match(/^#\s+(.+)$/m)?.[1] ?? path.basename(file)).trim(), rules, file,
+    kaneRules: rules.filter((r) => !isMath(r)),
+    mathRules: rules.filter(isMath).map((r) => r.replace(/\s*\[math\]\s*$/i, "")),
+  };
 }
 
 function loadPack(cfg, name) {
@@ -255,7 +262,7 @@ function invoiceObjective(pack) {
     `This page is a document that is checked against the rulebook "${pack.title}". Read the whole document carefully first.`,
     "Then check each of the following statements one at a time, looking at the document for evidence. Any statement that is false is a product bug.",
     "",
-    ...ruleAssertions(pack.rules),
+    ...ruleAssertions(pack.kaneRules ?? pack.rules),
   ].join("\n");
 }
 
@@ -336,9 +343,9 @@ async function verify(opts) {
   // confirm with a Kane reading pass before failing anyone. Green stays free; red gets verified.
   if (read.readBy === "graduated reader" && checkInvoiceMath(read.finalState).findings.length) {
     log(dim("  … graduated reader found an arithmetic error; confirming with a Kane reading pass"));
-    return withMathCheck(r, await readNumbers({ ...opts, readerFile: null }));
+    return withMathCheck(r, await readNumbers({ ...opts, readerFile: null }), opts.mathRules);
   }
-  return withMathCheck(r, read);
+  return withMathCheck(r, read, opts.mathRules);
 }
 
 /** The numbers on the page: from a graduated reader when there is one (free), else a Kane pass. */
@@ -361,11 +368,15 @@ async function runKaneOnce(opts) {
 }
 
 /** Re-add the invoice's numbers (as Kane read them) in code; arithmetic errors fail the check. */
-function withMathCheck(r, read) {
+function withMathCheck(r, read, mathRules = 0) {
   if (r.status === "error") return r;
   const math = checkInvoiceMath(read.finalState ?? {});
   math.readCredits = read.credits ?? 0;
   math.readBy = read.readBy;
+  // Arithmetic rules are only enforced by this check: if the numbers couldn't be read, those
+  // rules were not checked, and a pass would be claiming more than was verified.
+  if (math.skipped && mathRules && r.status === "passed")
+    return { ...r, math, status: "inconclusive", bugTitle: `Numbers could not be read, so ${mathRules} arithmetic rule(s) were not checked`, reason: math.skipped };
   if (!math.findings.length) return { ...r, math };
   const kaneFound = r.status === "failed";
   return {
@@ -516,7 +527,7 @@ async function gate(opts = {}) {
     let r = known(ch.id, ch.key);
     if (!r) {
       r = ch.kind === "invoice"
-        ? await verify({ objective: invoiceObjective(ch.pack), url: ch.url, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id, mathCheck: true, readerFile: ch.readerFile }, slot)
+        ? await verify({ objective: invoiceObjective(ch.pack), url: ch.url, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id, mathCheck: true, readerFile: ch.readerFile, mathRules: ch.pack.mathRules.length }, slot)
         : await verify({ objective: ch.objective, url: `${base}/`, timeoutSeconds: cfg.timeoutSeconds, logName: ch.id }, slot);
       remember(ch.id, ch.key, r);
     }
@@ -661,7 +672,7 @@ async function audit(target, opts = {}) {
   const pdfText = /\.pdf$/i.test(target) && !visual;
   log(bold(`\nInvoiceGuard audit`) + dim(`  ${target} · ${pack.title} (${pack.rules.length} rules)${visual ? " · visual mode (PDF)" : pdfText ? " · PDF text" : ""}`));
   const check = { id: "audit", title: `Audit of ${path.basename(target)}`, url };
-  const r = await verify({ objective: invoiceObjective(pack), url, timeoutSeconds: cfg.timeoutSeconds, visual, allFailures: true, logName: "audit", mathCheck: pack.kind === "invoice" });
+  const r = await verify({ objective: invoiceObjective(pack), url, timeoutSeconds: cfg.timeoutSeconds, visual, allFailures: true, logName: "audit", mathCheck: pack.kind === "invoice", mathRules: pack.mathRules?.length ?? 0 });
   docs.close();
   printResult(check, r);
   writeJson(path.join(STATE_DIR, "audit.json"), { target, at: new Date().toISOString(), result: r });
