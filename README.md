@@ -243,6 +243,9 @@ npm run gate          # ✗ Create an inter-state invoice from the editor
 git apply -R demo/place-of-supply-bug.patch
 ```
 
+**Watch Kane work:** [`docs/evidence/recordings.md`](docs/evidence/recordings.md) links the Kane CLI
+recording of every check: each step in Chrome, what Kane read, and every assertion.
+
 **The real agent loop:** [`docs/evidence/closed-loop.md`](docs/evidence/closed-loop.md) is the transcript
 of a real Claude Code session. Claude was asked to apply the "teammate refactor" and finish. The Stop
 hook blocked it with Kane's report, Claude fixed the bug, and the hook let it finish, in 4 minutes
