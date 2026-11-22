@@ -202,6 +202,9 @@ npm run prove                                         # plant 5 bugs, scorecard 
 npm run graduate                                      # re-write the readers after a layout change
 ```
 
+In Claude Code, `/invoiceguard check <file>`, `/invoiceguard match <invoice> <contract>`,
+`/invoiceguard verify` and `/invoiceguard math` drive the same checks through the MCP server.
+
 To get the agent loop in Claude Code:
 
 ```bash
