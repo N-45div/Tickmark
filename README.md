@@ -197,7 +197,7 @@ npm run dev                             # http://localhost:3000
 npm run gate                            # Kane verifies every sample invoice + flow
 npm run audit -- examples/india-vendor-invoice.html   # wrong GST type + GSTIN/state mismatch
 npm run audit -- examples/us-vendor-invoice.html      # taxed a non-taxable service + bad line math
-npm run audit -- examples/us-vendor-invoice.pdf       # the same invoice as a PDF (text read with pdftotext)
+npm run audit -- examples/us-vendor-invoice.pdf       # the same invoice as a PDF (needs pdftotext, from poppler-utils)
 npm run audit -- examples/contract-with-gaps.md       # contract: words vs figures, no governing law, …
 npm run prove                                         # plant 5 bugs, scorecard of unit tests vs Kane
 npm run graduate                                      # re-write the readers after a layout change
