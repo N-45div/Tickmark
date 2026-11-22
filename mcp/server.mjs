@@ -135,11 +135,11 @@ server.registerTool("check_document", {
     if (!name) throw new Error(`Could not tell what kind of document this is. Pass rulebook: one of ${PACKS.join(", ")}.`);
     const pack = loadPack(cfg, name);
     if (args.extra_rules?.length)
-      pack.rules = [...pack.rules, ...args.extra_rules.map((r, i) => `${pack.rules.length + i + 1}. ${r.replace(/^\d+\.\s*/, "")}`)];
+      pack.kaneRules = [...pack.kaneRules, ...args.extra_rules.map((r, i) => `${pack.rules.length + i + 1}. ${r.replace(/^\d+\.\s*/, "")}`)];
     const stop = keepAlive(extra, `Kane is reading the document against "${pack.title}"`);
     const result = await verify({
       objective: invoiceObjective(pack), url: docs.urls[0], timeoutSeconds: cfg.timeoutSeconds,
-      visual: docs.visual[0], allFailures: true, logName: `mcp-${name}`, mathCheck: pack.kind === "invoice",
+      visual: docs.visual[0], allFailures: true, logName: `mcp-${name}`, mathCheck: pack.kind === "invoice", mathRules: pack.mathRules?.length ?? 0,
     }).finally(stop);
     const s = { rulebook: name, ...summarize(result) };
     return ok(toMarkdown(`Checked against "${pack.title}"`, s), s);
