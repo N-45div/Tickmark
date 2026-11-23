@@ -15,7 +15,8 @@
     "audit": "node cli/invoiceguard.mjs audit",
     "prove": "node cli/invoiceguard.mjs prove",
     "math": "node cli/invoiceguard.mjs math",
-    "graduate": "node cli/invoiceguard.mjs graduate"
+    "graduate": "node cli/invoiceguard.mjs graduate",
+    "demo": "node cli/invoiceguard.mjs demo"
   },
   "license": "MIT",
   "dependencies": {
