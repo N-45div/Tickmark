@@ -567,12 +567,35 @@ function textToHtml(title, text) {
 </head><body>${body}</body></html>`;
 }
 
+const DOCUMENT_TYPES = /\.(html?|md|markdown|txt|pdf)$/i;
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Resolve a document path safely. Documents are shown to a cloud-recorded browser, so only
+ * invoice/contract formats are accepted, up to 10 MB. With insideRoot (used when an AI agent
+ * picks the file, e.g. via MCP) the real path must also be inside the working directory, so a
+ * prompt-injected agent can't send ~/.ssh or other private files through Kane.
+ */
+function resolveDocumentFile(file, { insideRoot = false } = {}) {
+  const resolved = path.resolve(ROOT, file);
+  if (!fs.existsSync(resolved)) throw new Error(`No such file: ${file}`);
+  const real = fs.realpathSync(resolved);
+  if (insideRoot) {
+    const root = fs.realpathSync(ROOT);
+    if (real !== root && !real.startsWith(root + path.sep))
+      throw new Error(`Refusing ${file}: documents must be inside ${root}`);
+  }
+  if (!DOCUMENT_TYPES.test(real)) throw new Error(`Refusing ${file}: only .html, .md, .txt and .pdf documents are checked`);
+  if (fs.statSync(real).size > MAX_DOCUMENT_BYTES) throw new Error(`Refusing ${file}: larger than 10 MB`);
+  return real;
+}
+
 /**
  * Make documents reachable by Kane's browser. Each doc is one of
  * { url } | { html } | { text } | { file } (html, txt, md or pdf).
  * Returns { urls: string[], texts: string[], close() }.
  */
-async function serveDocuments(docs) {
+async function serveDocuments(docs, opts = {}) {
   const pages = [];
   const urls = [], texts = [], visual = [];
   for (const [i, doc] of docs.entries()) {
@@ -587,8 +610,7 @@ async function serveDocuments(docs) {
     if (doc.html) body = doc.html;
     else if (doc.text) body = textToHtml(name, doc.text);
     else if (doc.file) {
-      const file = path.resolve(ROOT, doc.file);
-      if (!fs.existsSync(file)) throw new Error(`No such file: ${doc.file}`);
+      const file = resolveDocumentFile(doc.file, opts);
       if (/\.pdf$/i.test(file)) {
         // Prefer the PDF's own text (layout kept) as a normal page: Kane reads page text far more
         // reliably than it reads a PDF viewer visually. Fall back to the raw PDF + visual mode.
@@ -629,12 +651,12 @@ async function serveDocuments(docs) {
 }
 
 /** HTML body of a document, with styles, scripts and comments removed. */
-async function documentBody(doc) {
+async function documentBody(doc, opts = {}) {
   if (doc.text) return textToHtml("", doc.text).match(/<body>([\s\S]*)<\/body>/)[1];
   let html = doc.html;
   if (doc.url) html = await fetch(doc.url).then((r) => r.text());
   if (doc.file) {
-    const file = path.resolve(ROOT, doc.file);
+    const file = resolveDocumentFile(doc.file, opts);
     if (/\.pdf$/i.test(file)) throw new Error("PDFs are not supported for invoice-vs-contract yet; pass HTML, text or a URL");
     const raw = fs.readFileSync(file, "utf8");
     if (!/\.html?$/i.test(file)) return textToHtml("", raw).match(/<body>([\s\S]*)<\/body>/)[1];
@@ -645,13 +667,13 @@ async function documentBody(doc) {
 }
 
 /** One page holding both documents, so Kane reads them together in a single flow. */
-async function serveComparison(contract, invoice) {
+async function serveComparison(contract, invoice, opts = {}) {
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Contract and invoice</title>
 <style>body{font:15px/1.6 Georgia,serif;max-width:820px;margin:32px auto;padding:0 16px;color:#222;background:#fff}
 section{border:2px solid #333;padding:8px 24px 24px;margin-bottom:32px} .doc-label{font:700 13px sans-serif;letter-spacing:.12em}
 table{border-collapse:collapse;width:100%} td,th{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}</style></head><body>
-<section id="contract"><p class="doc-label">DOCUMENT 1 OF 2: THE CONTRACT</p>${await documentBody(contract)}</section>
-<section id="invoice"><p class="doc-label">DOCUMENT 2 OF 2: THE INVOICE</p>${await documentBody(invoice)}</section>
+<section id="contract"><p class="doc-label">DOCUMENT 1 OF 2: THE CONTRACT</p>${await documentBody(contract, opts)}</section>
+<section id="invoice"><p class="doc-label">DOCUMENT 2 OF 2: THE INVOICE</p>${await documentBody(invoice, opts)}</section>
 </body></html>`;
   return serveDocuments([{ html, name: "contract-and-invoice" }]);
 }
