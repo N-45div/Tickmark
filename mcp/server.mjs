@@ -88,6 +88,7 @@ function summarize(result) {
     evidence: result.evidence ?? [],
     suggestion: result.suggestion ?? null,
     recording_url: result.testUrl ?? null,
+    evidence_pack: result.evidencePack ?? null, // open with: kane-cli evidence serve <path>
     seconds: result.seconds ?? null,
     kane_credits: result.credits ?? null,
   };
@@ -106,6 +107,7 @@ function toMarkdown(title, s) {
   if (s.evidence.length) lines.push("**Seen on the page:**\n" + s.evidence.map((e) => `- ${e}`).join("\n"));
   if (s.suggestion) lines.push(`**Suggested fix:** ${s.suggestion}`);
   if (s.recording_url) lines.push(`[Kane recording](${s.recording_url})`);
+  if (s.evidence_pack) lines.push(`Evidence pack: \`kane-cli evidence serve ${s.evidence_pack}\``);
   return lines.join("\n\n");
 }
 
