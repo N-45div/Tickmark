@@ -185,8 +185,9 @@ the graduated readers:
 ```bash
 npm install
 npx playwright install chromium         # browser for the graduated readers
-npm test                                # 40 unit tests: tax logic, math check, export cleanup
-npm run math                            # starts the app, re-adds all 8 sample invoices (0 credits)
+npm run demo                            # 15 s: a tax bug the unit tests miss, caught for free
+npm test                                # unit tests: tax logic, math check, export cleanup
+npm run math                            # re-adds all 8 sample invoices (0 credits)
 ```
 
 **The full Kane CLI experience** ([free credits on signup](https://www.testmuai.com/kane-cli/)):
