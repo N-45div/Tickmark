@@ -282,7 +282,7 @@ function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint, allFailu
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, KANE_CLI_USER_AGENT: "invoiceguard" },
     });
-    let buf = "", runEnd = null, lastError = null, stderr = "";
+    let buf = "", runEnd = null, lastError = null, stderr = "", evidencePack = null;
     fs.mkdirSync(path.join(STATE_DIR, "runs"), { recursive: true });
     const raw = fs.createWriteStream(path.join(STATE_DIR, "runs", `${(logName ?? "run").replace(/[^\w.-]+/g, "_")}.ndjson`));
     const steps = [];
@@ -294,6 +294,7 @@ function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint, allFailu
         const line = buf.slice(0, i); buf = buf.slice(i + 1);
         let e; try { e = JSON.parse(line); } catch { continue; }
         if (e.type === "run_end") runEnd = e;
+        else if (e.type === "coverage" && e.pack) evidencePack = e.pack; // sealed per-run evidence pack
         else if (e.type === "error") lastError = e.message;
         else if (!e.type && e.status && e.status !== "running") steps.push({ status: e.status, remark: e.remark });
       }
@@ -326,6 +327,8 @@ function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint, allFailu
         failedSteps: steps.filter((s) => s.status === "failed" && !/^wait:/.test(s.remark ?? "")).map((s) => s.remark),
         testUrl: runEnd.test_url,
         finalState: runEnd.final_state ?? {},
+        sessionDir: runEnd.session_dir,
+        evidencePack,
         credits: runEnd.credits_consumed ?? runEnd.credits,
       });
     });
@@ -427,6 +430,7 @@ function printResult(check, r) {
   for (const f of r.math?.findings ?? []) log(red(`    • math: ${f}`));
   if (r.suggestion) log(dim(`    fix: ${r.suggestion}`));
   if (r.testUrl) log(dim(`    ${r.testUrl}`));
+  if (r.evidencePack) log(dim(`    evidence: kane-cli evidence serve ${r.evidencePack}`));
 }
 
 /** Compact, agent-readable failure report (what the coding agent gets back). */
@@ -443,6 +447,7 @@ function failureReport(failures) {
     if (r.evidence?.length) lines.push(`Evidence seen on the page:\n${r.evidence.map((e) => `  - ${e}`).join("\n")}`);
     if (r.suggestion) lines.push(`Kane's suggestion: ${r.suggestion}`);
     if (r.testUrl) lines.push(`Recording: ${r.testUrl}`);
+    if (r.evidencePack) lines.push(`Evidence pack (screenshot, console and network log for every step): ${r.evidencePack}\n  Open it with: kane-cli evidence serve ${r.evidencePack}`);
     return lines.join("\n");
   }).join("\n\n");
 }
