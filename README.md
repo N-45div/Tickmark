@@ -280,6 +280,18 @@ with no human in between.
 The gate starts your dev server if it isn't running. Reports go to `.kane/report.md` and
 `.kane/report.json`. Each check links to its Kane recording in TestMu Test Manager.
 
+## Security
+
+Documents you check are opened in a browser that Kane CLI records (screenshots, page text) in your
+TestMu account, so InvoiceGuard is careful about what it shows it:
+
+- Only invoice and contract formats are checked (`.html`, `.md`, `.txt`, `.pdf`, up to 10 MB).
+- When an **AI agent** picks the document (MCP tools), the file must be inside the project folder,
+  symlinks included, so a manipulated agent can't send `~/.ssh` or other private files. URLs must be
+  `http(s)`, and cloud metadata addresses are refused.
+- Results tell the agent that text quoted from a document is data to review, never instructions.
+- Credentials stay with `kane-cli login` or `LT_USERNAME` / `LT_ACCESS_KEY`; InvoiceGuard never stores them.
+
 ## Disclaimer
 
 The rulebooks cover common mandatory fields, tax decisions and contract terms. They are not tax or legal
