@@ -1,13 +1,24 @@
 # InvoiceGuard
 
-**Invoices that can't go out wrong.** A small invoice maker for freelancers and small businesses
-in **India (GST)** and the **United States (sales tax)**. The tax rules live in plain-English rulebooks,
-and [Kane CLI](https://github.com/LambdaTest/kane-cli) checks them in a real Chrome browser on every
-change. When Kane finds a broken rule, the bug report goes back to the coding agent, which has to fix it
-before it's allowed to say "done". Kane can also audit invoices and **contracts** *you receive*, and check
-that an invoice bills what the contract agreed, from any AI agent via **MCP**.
+**Your AI coding agent can't say "done" until a real browser says the invoice is right.**
 
-**Live app:** https://invoiceguard-n45divs-projects.vercel.app (try `/samples` for the 8 sample invoices)
+Tax rules written in plain English, checked by [Kane CLI](https://github.com/LambdaTest/kane-cli) in Chrome,
+with the bug report going straight back to Claude Code, which fixes it. India GST and US sales tax built in,
+contracts too.
+
+- 🧾 **Rules anyone can read and edit:** `kane/rules/*.md`. Add your country in a pull request.
+- 🛑 **A Stop hook for Claude Code:** Kane blocks the agent with the bug, the evidence and a fix until it's right.
+- ➗ **Kane reads, code does the math:** and the reader graduates to free, offline Playwright.
+
+**Try it in 15 seconds, no account:** `npm install && npx playwright install chromium && npm run demo`
+
+![A real Claude Code session: the Stop hook blocks Claude with Kane's bug report, Claude fixes it, the hook lets it finish](docs/images/closed-loop.png)
+
+<sub>Excerpt from a real session, shown as a terminal: full transcript in
+[docs/evidence/closed-loop.md](docs/evidence/closed-loop.md).</sub>
+
+**Live app:** https://invoiceguard-n45divs-projects.vercel.app · **Kane caught 5/5 planted bugs, unit tests 2/5**
+([proof](docs/evidence/prove.md)) · **every check recorded** ([recordings](docs/evidence/recordings.md))
 
 > Built for the [KaneCLI Hackathon](https://www.kaneclihack.sh/) · agent: Claude Code · verifier: Kane CLI
 
