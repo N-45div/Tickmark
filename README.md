@@ -286,6 +286,12 @@ with no human in between.
 The gate starts your dev server if it isn't running. Reports go to `.kane/report.md` and
 `.kane/report.json`. Each check links to its Kane recording in TestMu Test Manager.
 
+## Contributing
+
+The best contribution is a **rulebook for your country**: plain-English rules in a Markdown file,
+checked by Kane CLI. [CONTRIBUTING.md](CONTRIBUTING.md) walks through it, and the
+"New country rulebook" issue template helps you propose rules before writing code.
+
 ## Security
 
 Documents you check are opened in a browser that Kane CLI records (screenshots, page text) in your
