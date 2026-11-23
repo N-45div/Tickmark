@@ -77,6 +77,11 @@ An arithmetic error fails the check with the exact numbers, even when Kane's own
 Passing checks say how many sums were re-added (`· math ✓ 6 sums`). The reading pass costs about
 20 extra Kane credits per invoice check, and unchanged invoices are still served from cache.
 
+Every `gate` and `audit` run also writes a one-page HTML report (`.kane/report.html`, `.kane/audit.html`)
+you can open, screenshot or attach to a PR. This is the real audit of `examples/us-vendor-invoice.pdf`:
+
+![Audit report: 2 arithmetic errors found in a vendor PDF](docs/images/audit-report.png)
+
 ### Graduated readers: the math check for zero credits
 
 Kane can export a test it has written as plain Playwright code. `invoiceguard graduate` uses that:
