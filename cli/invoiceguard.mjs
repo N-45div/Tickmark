@@ -23,6 +23,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { checkInvoiceMath } from "./mathcheck.mjs";
 import { graduate as graduateReader, readerPath, runReader } from "./graduate.mjs";
+import { renderReport } from "./report-html.mjs";
 
 const ROOT = process.cwd();
 // Where reports, caches and raw Kane logs go. Falls back to a temp dir when the
@@ -466,6 +467,11 @@ function writeReport(summary) {
     summary.passed ? "" : failureReport(summary.results.filter((x) => x.result.status !== "passed")),
   ].join("\n");
   fs.writeFileSync(path.join(STATE_DIR, "report.md"), md);
+  fs.writeFileSync(path.join(STATE_DIR, "report.html"), renderReport({
+    heading: "InvoiceGuard report",
+    subtitle: `${summary.results.length} checks by Kane CLI · ${new Date(summary.at).toUTCString()}`,
+    rows: summary.results.map(({ check, result }) => ({ title: check.title, url: check.url, result })),
+  }));
 }
 
 // ------------------------------------------------------------------ commands
@@ -555,9 +561,9 @@ async function gate(opts = {}) {
     writeJson(hookFile, { ...readJson(hookFile, {}), lastGreen: srcHash, attempts: 0 });
   }
   log(summary.passed
-    ? green(bold(`\nAll ${results.length} checks passed.`)) + dim(" Report: .kane/report.md")
+    ? green(bold(`\nAll ${results.length} checks passed.`)) + dim(" Report: .kane/report.html")
     : red(bold(`\n${results.filter((x) => x.result.status !== "passed").length} of ${results.length} checks did not pass`))
-      + dim(` (${results.filter((x) => x.result.status === "failed").length} failed, ${results.filter((x) => !["passed", "failed"].includes(x.result.status)).length} inconclusive/error). Report: .kane/report.md`));
+      + dim(` (${results.filter((x) => x.result.status === "failed").length} failed, ${results.filter((x) => !["passed", "failed"].includes(x.result.status)).length} inconclusive/error). Report: .kane/report.html`));
   return summary;
 }
 
@@ -705,6 +711,12 @@ async function audit(target, opts = {}) {
   docs.close();
   printResult(check, r);
   writeJson(path.join(STATE_DIR, "audit.json"), { target, at: new Date().toISOString(), result: r });
+  fs.writeFileSync(path.join(STATE_DIR, "audit.html"), renderReport({
+    heading: `Audit: ${path.basename(target)}`,
+    subtitle: `${pack.title} · ${pack.rules.length} rules · checked by Kane CLI · ${new Date().toUTCString()}`,
+    rows: [{ title: path.basename(target), url: /^https?:\/\//.test(target) ? target : undefined, result: r }],
+  }));
+  log(dim("Report: .kane/audit.html"));
   return r;
 }
 
