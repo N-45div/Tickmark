@@ -1,0 +1,33 @@
+name: New country rulebook
+description: Propose plain-English invoice rules for a country or tax regime
+title: "Rulebook: <country / regime>"
+labels: ["rulebook", "good first issue"]
+body:
+  - type: input
+    id: regime
+    attributes:
+      label: Country or tax regime
+      placeholder: e.g. United Kingdom VAT, Australia GST, EU reverse charge
+    validations:
+      required: true
+  - type: textarea
+    id: rules
+    attributes:
+      label: Proposed rules
+      description: One checkable statement about visible text per line. Tag arithmetic rules with [math].
+      placeholder: |
+        1. The supplier's VAT registration number is shown.
+        2. The total VAT equals the sum of each line's VAT to within £0.01. [math]
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Official sources
+      description: Links to the tax authority's guidance for each rule.
+    validations:
+      required: true
+  - type: textarea
+    id: mistakes
+    attributes:
+      label: Common real-world mistakes these rules would catch
