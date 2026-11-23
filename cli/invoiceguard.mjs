@@ -8,6 +8,7 @@
 //   invoiceguard prove           plant each bug in demo/, run unit tests + Kane, print a scorecard
 //   invoiceguard graduate        have Kane write + export a Playwright reader per invoice layout
 //   invoiceguard math            re-add every sample invoice's numbers via the readers (0 credits)
+//   invoiceguard demo            30-second demo, no account: plant a tax bug, unit tests pass, math catches it
 //   invoiceguard init            install the hook + rules into the current project
 //
 // Zero dependencies. Needs `kane-cli` on PATH and a logged-in profile
@@ -149,8 +150,9 @@ async function reachable(url) {
   try { const r = await fetch(url, { signal: AbortSignal.timeout(3000) }); return r.status < 500; } catch { return false; }
 }
 
-async function ensureServer(cfg) {
+async function ensureServer(cfg, { quiet = false } = {}) {
   if (await reachable(cfg.baseUrl)) {
+    if (quiet) return;
     // Not ours: make it visible, a stale production build would be verified instead of your edits.
     log(dim(`Using the app already running at ${cfg.baseUrl} (make sure it serves your latest code, e.g. \`npm run dev\`)`));
     return;
@@ -855,13 +857,14 @@ async function graduate(opts = {}) {
 }
 
 /** Read every sample invoice with its graduated reader and check the sums. No Kane credits. */
-async function math() {
+async function math({ pack, quiet = false } = {}) {
   const cfg = loadConfig();
-  await ensureServer(cfg);
+  await ensureServer(cfg, { quiet });
   const base = cfg.baseUrl.replace(/\/$/, "");
-  log(bold("\nInvoiceGuard math") + dim("  graduated readers + math check, no Kane credits"));
+  const invoices = pack ? cfg.invoices.filter((i) => i.pack === pack) : cfg.invoices;
+  if (!quiet) log(bold("\nInvoiceGuard math") + dim("  graduated readers + math check, no Kane credits"));
   let bad = 0;
-  for (const inv of cfg.invoices) {
+  for (const inv of invoices) {
     const reader = readerPath(ROOT, inv.pack);
     const name = inv.path.split("/").pop();
     if (!fs.existsSync(reader)) { bad++; log(`${yellow("?")} ${name}: no graduated ${inv.pack} reader yet (run \`invoiceguard graduate --pack ${inv.pack}\`)`); continue; }
@@ -873,8 +876,50 @@ async function math() {
       else log(`${green("✓")} ${name}${ms}${dim(` · ${r.checked.length} sums`)}${r.skipped ? dim(` (${r.skipped})`) : ""}`);
     } catch (err) { bad++; log(`${yellow("!")} ${name}: ${err.message}`); }
   }
-  log(bad ? red(bold(`\n${bad} of ${cfg.invoices.length} invoices have a problem.`)) : green(bold(`\nAll ${cfg.invoices.length} invoices add up.`)));
+  log(bad ? red(bold(`${quiet ? "" : "\n"}${bad} of ${invoices.length} invoices have a problem.`)) : green(bold(`${quiet ? "" : "\n"}All ${invoices.length} invoices add up.`)));
   return bad === 0;
+}
+
+/**
+ * The 30-second demo, no Kane account needed: plant a realistic tax bug, show the unit tests
+ * still pass, show the graduated readers + math check catch it, then revert and show green.
+ */
+async function demo() {
+  const patch = path.join("demo", "us-tax-on-subtotal-bug.patch");
+  const git = (...a) => spawnSync("git", a, { cwd: ROOT, encoding: "utf8" });
+  if (!fs.existsSync(path.join(ROOT, patch))) throw new Error("Run the demo from a clone of the InvoiceGuard repo");
+  if (git("apply", "--check", patch).status !== 0) throw new Error(`${patch} doesn't apply: is it already applied, or are files modified?`);
+  const cfg = loadConfig();
+  await ensureServer(cfg, { quiet: true });
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+  let applied = false;
+  const revert = () => { if (applied) { git("apply", "-R", patch); applied = false; } };
+  const onSignal = () => { revert(); process.exit(130); };
+  process.once("SIGINT", onSignal);
+  try {
+    log(bold("\n1/4  A teammate's \"simpler\" US invoice template:"));
+    log(dim("     const tax = rate × subtotal   // taxes the non-taxable workshop line too"));
+    git("apply", patch); applied = true;
+    await pause(1500); // let the dev server pick it up
+
+    log(bold("\n2/4  Unit tests"));
+    const unit = spawnSync("npx", ["vitest", "run"], { cwd: ROOT, encoding: "utf8" });
+    const count = (unit.stdout + unit.stderr).match(/Tests\s+(\d+) passed/)?.[1];
+    log(unit.status === 0 ? green(`     ✓ all ${count ?? ""} pass`) + dim("  (they test the tax logic, not what the customer sees)") : red("     ✗ unit tests failed"));
+
+    log(bold("\n3/4  InvoiceGuard reads the US invoices in a real browser and re-adds every number"));
+    await math({ pack: "us-sales-tax", quiet: true });
+
+    log(bold("\n4/4  Revert the bug"));
+    revert();
+    await pause(1500);
+    await math({ pack: "us-sales-tax", quiet: true });
+  } finally {
+    revert();
+    process.removeListener("SIGINT", onSignal);
+  }
+  log(dim("\nThat check ran for free on readers Kane wrote once. With a Kane account, `npm run gate` checks every rule,"));
+  log(dim("and `node cli/invoiceguard.mjs init` makes Claude Code fix bugs like this before it may say \"done\"."));
 }
 
 /**
@@ -1001,6 +1046,8 @@ try {
     await graduate({ pack: flag("--pack"), sample: flag("--sample") });
   } else if (cmd === "math") {
     process.exit((await math()) ? 0 : 1);
+  } else if (cmd === "demo") {
+    await demo();
   } else if (cmd === "hook") {
     await hook();
     process.exit(0);
@@ -1014,6 +1061,7 @@ try {
   prove [--only <name>] [--no-cache]         plant each demo/*.patch bug; scorecard of unit tests vs Kane
   graduate [--pack name] [--sample path]     Kane writes + exports a Playwright reader per invoice layout
   math                                       re-add every sample invoice via the readers (0 Kane credits)
+  demo                                       30-second demo, no account: a tax bug unit tests miss, caught
   hook                                       Claude Code Stop hook (reads stdin)
   init                                       install the hook and rules here`);
     process.exit(cmd ? 2 : 0);
