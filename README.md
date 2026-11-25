@@ -22,7 +22,7 @@ each invoice in a real browser, code re-adding every number Kane reads, and Clau
 <sub>Excerpt from a real session, shown as a terminal: full transcript in
 [docs/evidence/closed-loop.md](docs/evidence/closed-loop.md).</sub>
 
-**Live app:** https://invoiceguard-delta.vercel.app · **every Kane check recorded** ([recordings](docs/evidence/recordings.md))
+**Live app:** https://tickmark-invoices.vercel.app · **every Kane check recorded** ([recordings](docs/evidence/recordings.md))
 
 > Built for the [KaneCLI Hackathon](https://www.kaneclihack.sh/) · agent: Claude Code · verifier: Kane CLI
 
@@ -30,7 +30,7 @@ each invoice in a real browser, code re-adding every number Kane reads, and Clau
 
 | Criterion | Where to see it |
 | --- | --- |
-| **Works end to end** | The [live app](https://invoiceguard-delta.vercel.app); `npm run demo` (no account, 15 s); `npm run gate` (Kane checks every sample invoice and flow) |
+| **Works end to end** | The [live app](https://tickmark-invoices.vercel.app); `npm run demo` (no account, 15 s); `npm run gate` (Kane checks every sample invoice and flow) |
 | **Kane caught or proved something real** | [An audit of a real invoice from a 531★ open-source GST app](docs/evidence/real-world.md), including what Kane missed · [5/5 planted bugs vs 2/5 for unit tests](docs/evidence/prove.md) |
 | **The agent and Kane talk to each other** | [A real Claude Code transcript](docs/evidence/closed-loop.md): the Stop hook blocks Claude with Kane's bug report, Claude fixes the code, Kane re-checks, Claude may finish |
 | **Verified, not vibes** | One `Assert that …` per rule; arithmetic and dates checked in code, not by the model ([why](#kane-reads-code-does-the-math)); readers installed only if they read every known-good sample; [recordings](docs/evidence/recordings.md) of every check |
