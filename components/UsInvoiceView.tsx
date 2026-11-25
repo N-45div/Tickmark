@@ -69,7 +69,7 @@ export function UsInvoiceView({ inv }: { inv: ComputedUsInvoice }) {
         </div>
         <table>
           <tbody>
-            <tr><td>Subtotal</td><td className="num">{formatUSD(inv.subtotal)}</td></tr>
+            <tr><td>Subtotal</td><td className="num" data-testid="subtotal">{formatUSD(inv.subtotal)}</td></tr>
             <tr data-testid="tax-line">
               <td>{decision.collect ? decision.label : "Sales tax"}</td>
               <td className="num">{formatUSD(inv.tax)}</td>
