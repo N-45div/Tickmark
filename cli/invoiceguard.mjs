@@ -736,6 +736,10 @@ async function prove(opts = {}) {
     if (check.status !== 0) throw new Error(`${p} does not apply cleanly (is it already applied, or are files modified?)\n${check.stderr}`);
   }
 
+  // While bugs are planted on purpose, the Claude Code hook must not check (or "fix") the app.
+  const lock = path.join(STATE_DIR, "prove.lock");
+  fs.mkdirSync(STATE_DIR, { recursive: true });
+  fs.writeFileSync(lock, String(process.pid));
   let applied = null;
   const revert = () => { if (applied) { git("apply", "-R", path.join("demo", applied)); applied = null; } };
   const onSignal = () => { revert(); process.exit(130); };
@@ -771,6 +775,7 @@ async function prove(opts = {}) {
     }
   } finally {
     revert();
+    fs.rmSync(lock, { force: true });
     process.removeListener("SIGINT", onSignal);
     process.removeListener("SIGTERM", onSignal);
   }
@@ -946,6 +951,13 @@ async function hook() {
   const stateFile = path.join(STATE_DIR, "hook.json");
   const state = readJson(stateFile, { lastGreen: null, attempts: 0 });
   const src = sourceHash(cfg);
+
+  // `invoiceguard prove` is planting bugs on purpose: don't check (or ask the agent to fix) them.
+  const lockPid = Number(fs.existsSync(path.join(STATE_DIR, "prove.lock")) && fs.readFileSync(path.join(STATE_DIR, "prove.lock"), "utf8"));
+  if (lockPid && (() => { try { process.kill(lockPid, 0); return true; } catch { return false; } })()) {
+    console.log(JSON.stringify({ systemMessage: "InvoiceGuard: `invoiceguard prove` is planting demo bugs right now, so the Kane check is skipped. The planted bugs are reverted automatically." }));
+    return;
+  }
 
   if (state.lastGreen === src) { // nothing changed since Kane last signed off
     if (state.attempts) {
