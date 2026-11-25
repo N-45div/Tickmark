@@ -19,7 +19,7 @@ contracts too.
 <sub>Excerpt from a real session, shown as a terminal: full transcript in
 [docs/evidence/closed-loop.md](docs/evidence/closed-loop.md).</sub>
 
-**Live app:** https://invoiceguard-n45divs-projects.vercel.app · **Kane caught 5/5 planted bugs, unit tests 2/5**
+**Live app:** https://invoiceguard-delta.vercel.app · **Kane caught 5/5 planted bugs, unit tests 2/5**
 ([proof](docs/evidence/prove.md)) · **every check recorded** ([recordings](docs/evidence/recordings.md))
 
 > Built for the [KaneCLI Hackathon](https://www.kaneclihack.sh/) · agent: Claude Code · verifier: Kane CLI
