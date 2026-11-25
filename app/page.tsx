@@ -5,7 +5,8 @@ import { IndiaEditor } from "@/components/IndiaEditor";
 import { UsEditor } from "@/components/UsEditor";
 
 type Country = "in" | "us";
-const KEY = "invoiceguard:country";
+const KEY = "tickmark:country";
+const OLD_KEY = "invoiceguard:country";
 
 export default function Home() {
   const [country, setCountry] = useState<Country>("in");
@@ -13,7 +14,7 @@ export default function Home() {
   useEffect(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("country");
     let saved: string | null = null;
-    try { saved = localStorage.getItem(KEY); } catch {}
+    try { saved = localStorage.getItem(KEY) ?? localStorage.getItem(OLD_KEY); } catch {}
     const c = fromUrl ?? saved;
     if (c === "us" || c === "in") setCountry(c);
   }, []);

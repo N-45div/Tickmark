@@ -8,12 +8,14 @@ import {
   type InvoiceInput, type LineItem, type Party,
 } from "@/lib/gst";
 
-const STORE_KEY = "invoiceguard:v1";
+const STORE_KEY = "tickmark:v1";
+// Drafts and the invoice sequence saved before the rename from InvoiceGuard.
+const OLD_STORE_KEY = "invoiceguard:v1";
 type Store = { seq: number; issued: InvoiceInput[]; supplier: Party };
 
 function loadStore(): Store {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
+    const raw = localStorage.getItem(STORE_KEY) ?? localStorage.getItem(OLD_STORE_KEY);
     if (raw) return JSON.parse(raw) as Store;
   } catch {}
   return { seq: 0, issued: [], supplier: SUPPLIER };
