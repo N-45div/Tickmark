@@ -5,7 +5,7 @@ reads the invoice in a real browser and checks each one. US sales tax is set per
 state and is only collected where the seller has nexus, and many services are not
 taxable. These rules cover the decisions a small business has to get right.
 Edit, add or remove rules freely. Each numbered line is checked. Rules tagged [math] are
-arithmetic: InvoiceGuard re-adds the numbers in code instead of asking Kane to do sums.
+arithmetic: Tickmark re-adds the numbers in code instead of asking Kane to do sums.
 
 1. The main heading of the document reads "Invoice", and the document states that amounts are in US dollars (USD).
 2. The seller ("From") name and address are shown, and the customer ("Bill to") name, address and state are shown.
