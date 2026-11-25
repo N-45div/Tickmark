@@ -21,6 +21,19 @@ const FIELDS = ["line_items", "subtotal", "tax_lines", "round_off", "total", "am
  *  - read the invoice URL from INVOICE_URL instead of the recorded one,
  *  - print what was read on one line, for runReader().
  */
+// Fields with a stable data-testid on the page. Kane sometimes finds a value by the text it saw
+// ("-12-2026 (Net 30)"), which only works on invoices that happen to print the same text.
+const FIELD_TESTIDS = { invoice_date: "invoice-date", due_date: "due-date", payment_terms: "payment-terms", round_off: "round-off", total: "grand-total" };
+
+/** Point a step that finds its value by visible text at the field's data-testid instead. */
+export function repointPinnedText(block) {
+  const field = block.match(/setVar\("(\w+)"/)?.[1];
+  const testid = FIELD_TESTIDS[field];
+  if (!testid) return block;
+  return block.replace(/locators: \[([^\]]*)\]/, (all, list) =>
+    /internal:text=/.test(list) ? `locators: [${JSON.stringify(`internal:testid=[data-testid="${testid}"s]`)}]` : all);
+}
+
 export function sanitizeExport(code, { name, recordedUrl }) {
   // Split off the closing of the test body ("});" … testmu.run()) before touching the steps,
   // because the last step's block would otherwise carry it away when removed.
@@ -30,7 +43,10 @@ export function sanitizeExport(code, { name, recordedUrl }) {
   const tail = code.slice(run.index);
 
   const blocks = body.split(/(?=\n {2}await testmu\.step\()/);
-  let s = blocks.filter((b) => !b.includes("_stored_check") && !b.includes('"Assertion check"')).join("");
+  let s = blocks
+    .filter((b) => !b.includes("_stored_check") && !b.includes('"Assertion check"'))
+    .map(repointPinnedText)
+    .join("");
 
   s = s.replace(/testmu\.configure\(\{[\s\S]*?\n\}\);/, `testmu.configure({
   "name": ${JSON.stringify(`${name} invoice reader`)},
