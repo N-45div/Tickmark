@@ -22,8 +22,8 @@ export function UsInvoiceView({ inv }: { inv: ComputedUsInvoice }) {
         </div>
         <dl className="meta">
           <dt>Invoice No.</dt><dd data-testid="invoice-number">{input.number}</dd>
-          <dt>Issue date</dt><dd>{formatUsDate(input.date)}</dd>
-          <dt>Due date</dt><dd>{formatUsDate(inv.dueDate)}{input.paymentTermsDays ? ` (Net ${input.paymentTermsDays})` : " (Due on receipt)"}</dd>
+          <dt>Issue date</dt><dd data-testid="invoice-date">{formatUsDate(input.date)}</dd>
+          <dt>Due date</dt><dd><span data-testid="due-date">{formatUsDate(inv.dueDate)}</span><span data-testid="payment-terms">{input.paymentTermsDays ? ` (Net ${input.paymentTermsDays})` : " (Due on receipt)"}</span></dd>
         </dl>
       </header>
 

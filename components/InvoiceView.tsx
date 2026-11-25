@@ -28,8 +28,8 @@ export function InvoiceView({ inv }: { inv: ComputedInvoice }) {
         </div>
         <dl className="meta">
           <dt>Invoice No.</dt><dd data-testid="invoice-number">{input.number}</dd>
-          <dt>Invoice date</dt><dd>{formatDate(input.date)}</dd>
-          <dt>Due date</dt><dd>{formatDate(inv.dueDate)}{input.paymentTermsDays ? ` (Net ${input.paymentTermsDays})` : " (Due on receipt)"}</dd>
+          <dt>Invoice date</dt><dd data-testid="invoice-date">{formatDate(input.date)}</dd>
+          <dt>Due date</dt><dd><span data-testid="due-date">{formatDate(inv.dueDate)}</span><span data-testid="payment-terms">{input.paymentTermsDays ? ` (Net ${input.paymentTermsDays})` : " (Due on receipt)"}</span></dd>
           <dt>Place of supply</dt><dd data-testid="place-of-supply">{stateLabel(input.placeOfSupplyCode)}</dd>
           <dt>Reverse charge</dt><dd>{input.reverseCharge ? "Yes" : "No"}</dd>
         </dl>
