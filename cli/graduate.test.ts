@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeExport } from "./graduate.mjs";
+import { repointPinnedText, sanitizeExport } from "./graduate.mjs";
 
 // A made-up export in the shape Kane CLI produces (ids are fake).
 const URL = "http://localhost:3000/invoice/sample/example";
@@ -58,5 +58,23 @@ describe("sanitizeExport", () => {
   });
   it("refuses an export it doesn't recognise", () => {
     expect(() => sanitizeExport("console.log(1)", { name: "x", recordedUrl: URL })).toThrow(/testmu\.run/);
+  });
+});
+
+describe("repointPinnedText", () => {
+  const step = (field: string, locator: string) =>
+    `\n  await testmu.step("Reading", async () => {\n    setVar("${field}", await testmu.textualAnalyzer(page, { wrappedJs: "(els) => 1", locators: [${JSON.stringify(locator)}], query: "q" }));\n  });`;
+
+  it("points a value Kane found by its visible text at the field's test id", () => {
+    const out = repointPinnedText(step("due_date", 'internal:text="-12-2026 (Net 30)"i'));
+    expect(out).toContain('locators: ["internal:testid=[data-testid=\\"due-date\\"s]"]');
+    expect(out).not.toContain("Net 30");
+  });
+
+  it("leaves test-id locators and fields without a known test id alone", () => {
+    const byTestId = step("due_date", 'internal:testid=[data-testid="due-date"s]');
+    expect(repointPinnedText(byTestId)).toBe(byTestId);
+    const unknown = step("line_items", 'internal:text="Web design"i');
+    expect(repointPinnedText(unknown)).toBe(unknown);
   });
 });
