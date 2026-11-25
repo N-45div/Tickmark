@@ -1,5 +1,7 @@
 # InvoiceGuard
 
+[![InvoiceGuard CI](https://github.com/N-45div/kanehack/actions/workflows/invoiceguard.yml/badge.svg)](https://github.com/N-45div/kanehack/actions/workflows/invoiceguard.yml)
+
 **Your AI coding agent can't say "done" until a real browser says the invoice is right.**
 
 Tax rules written in plain English, checked by [Kane CLI](https://github.com/LambdaTest/kane-cli) in Chrome,
