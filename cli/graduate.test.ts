@@ -52,7 +52,7 @@ describe("sanitizeExport", () => {
   });
   it("reports what was read and still closes and runs the test", () => {
     expect(code).toContain('testmu.step("Report what was read"');
-    expect(code).toContain("INVOICEGUARD_READ ");
+    expect(code).toContain("TICKMARK_READ ");
     expect(code.trimEnd()).toMatch(/\}\);\s*testmu\.run\(\);$/);
     expect(code.indexOf("Report what was read")).toBeLessThan(code.lastIndexOf("testmu.run()"));
   });

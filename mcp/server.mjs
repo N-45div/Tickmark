@@ -15,7 +15,7 @@ import { z } from "zod";
 import {
   detectPack, failureReport, gate, invoiceObjective, loadConfig, loadPack, loadRulebook,
   ruleAssertions, serveComparison, serveDocuments, verify,
-} from "../cli/invoiceguard.mjs";
+} from "../cli/tickmark.mjs";
 
 const cfg = loadConfig();
 const PACKS = Object.keys(cfg.rulePacks);
@@ -202,7 +202,7 @@ server.registerTool("check_invoice_against_contract", {
 server.registerTool("verify_project", {
   title: "Verify this app with Kane",
   description: [
-    "Run InvoiceGuard's Kane gate on this project: every sample invoice and user flow listed in invoiceguard.config.json",
+    "Run InvoiceGuard's Kane gate on this project: every sample invoice and user flow listed in tickmark.config.json",
     "is opened in a real browser and checked against its rulebook. Use it after changing invoice code; if it fails,",
     "fix the application code (never weaken the rulebooks) and run it again. Unchanged invoices are skipped.",
   ].join(" "),
@@ -212,8 +212,8 @@ server.registerTool("verify_project", {
   },
   annotations: { readOnlyHint: false, openWorldHint: true },
 }, async ({ only, no_cache }, extra) => {
-  if (!fs.existsSync(path.join(process.cwd(), "invoiceguard.config.json")))
-    return fail("No invoiceguard.config.json in the server's working directory, so there is no project to verify.");
+  if (!fs.existsSync(path.join(process.cwd(), "tickmark.config.json")))
+    return fail("No tickmark.config.json in the server's working directory, so there is no project to verify.");
   const stop = keepAlive(extra, "Kane is verifying the app");
   try {
     const summary = await gate({ only, noCache: no_cache });

@@ -75,7 +75,7 @@ footer{margin-top:28px;color:var(--muted);font-size:13px}
 <ul class="checks">
 ${rows.map(row).join("\n")}
 </ul>
-<footer>Checked by <a href="https://github.com/LambdaTest/kane-cli">Kane CLI</a> in a real browser, with every number re-added in code by InvoiceGuard. Findings to review, not tax or legal advice.</footer>
+<footer>Checked by <a href="https://github.com/LambdaTest/kane-cli">Kane CLI</a> in a real browser, with every number re-added in code by Tickmark. Findings to review, not tax or legal advice.</footer>
 </main></body></html>
 `;
 }

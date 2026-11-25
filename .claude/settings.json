@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node cli/invoiceguard.mjs hook",
+            "command": "node cli/tickmark.mjs hook",
             "timeout": 1200
           }
         ]

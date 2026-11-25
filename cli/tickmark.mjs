@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// invoiceguard — verify invoices (India GST, US sales tax) in a real browser with Kane CLI.
+// tickmark — verify invoices (India GST, US sales tax) in a real browser with Kane CLI.
 //
-//   invoiceguard gate            check every sample invoice + user flow of this app
-//   invoiceguard audit <url|file> check any invoice page (yours or a vendor's);
+//   tickmark gate            check every sample invoice + user flow of this app
+//   tickmark audit <url|file> check any invoice page (yours or a vendor's);
 //                                 picks the India GST or US sales tax rulebook automatically
-//   invoiceguard hook            Claude Code Stop hook: block "done" until Kane passes
-//   invoiceguard prove           plant each bug in demo/, run unit tests + Kane, print a scorecard
-//   invoiceguard graduate        have Kane write + export a Playwright reader per invoice layout
-//   invoiceguard math            re-add every sample invoice's numbers via the readers (0 credits)
-//   invoiceguard demo            30-second demo, no account: plant a tax bug, unit tests pass, math catches it
-//   invoiceguard init            install the hook + rules into the current project
+//   tickmark hook            Claude Code Stop hook: block "done" until Kane passes
+//   tickmark prove           plant each bug in demo/, run unit tests + Kane, print a scorecard
+//   tickmark graduate        have Kane write + export a Playwright reader per invoice layout
+//   tickmark math            re-add every sample invoice's numbers via the readers (0 credits)
+//   tickmark demo            30-second demo, no account: plant a tax bug, unit tests pass, math catches it
+//   tickmark init            install the hook + rules into the current project
 //
 // Zero dependencies. Needs `kane-cli` on PATH and a logged-in profile
 // (`kane-cli login`), or LT_USERNAME / LT_ACCESS_KEY in the environment.
@@ -28,9 +28,9 @@ import { renderReport } from "./report-html.mjs";
 const ROOT = process.cwd();
 // Where reports, caches and raw Kane logs go. Falls back to a temp dir when the
 // working directory is not writable (e.g. an MCP server launched from "/").
-const STATE_DIR = process.env.INVOICEGUARD_STATE_DIR ?? (() => {
+const STATE_DIR = process.env.TICKMARK_STATE_DIR ?? (() => {
   try { fs.accessSync(ROOT, fs.constants.W_OK); return path.join(ROOT, ".kane"); }
-  catch { return path.join(os.tmpdir(), "invoiceguard"); }
+  catch { return path.join(os.tmpdir(), "tickmark"); }
 })();
 const PKG_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -42,7 +42,7 @@ const log = (...a) => console.error(...a);
 // ------------------------------------------------------------------ config
 
 function loadConfig() {
-  const file = path.join(ROOT, "invoiceguard.config.json");
+  const file = path.join(ROOT, "tickmark.config.json");
   const defaults = {
     baseUrl: "http://localhost:3000",
     devCommand: "npm run dev",
@@ -197,7 +197,7 @@ function chromePath() {
 async function launchChrome() {
   const bin = chromePath();
   if (!bin) return null;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "invoiceguard-chrome-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tickmark-chrome-"));
   // Port 0: Chrome picks a free port and writes it to DevToolsActivePort, so any
   // number of runs (CLI, CI, parallel MCP calls) can coexist.
   const proc = spawn(bin, [
@@ -283,7 +283,7 @@ function runKane({ objective, url, timeoutSeconds, visual, cdpEndpoint, allFailu
     const started = Date.now();
     const child = spawn("kane-cli", args, {
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, KANE_CLI_USER_AGENT: "invoiceguard" },
+      env: { ...process.env, KANE_CLI_USER_AGENT: "tickmark" },
     });
     let buf = "", runEnd = null, lastError = null, stderr = "", evidencePack = null;
     fs.mkdirSync(path.join(STATE_DIR, "runs"), { recursive: true });
@@ -391,7 +391,7 @@ function withMathCheck(r, read, mathRules = 0) {
     status: "failed",
     bugTitle: kaneFound && r.bugTitle ? r.bugTitle : `Arithmetic error: ${math.findings[0]}`,
     rootCause: kaneFound ? r.rootCause
-      : `InvoiceGuard's math check re-added the numbers Kane read from the page and found ${math.findings.length} error(s).`,
+      : `Tickmark's math check re-added the numbers Kane read from the page and found ${math.findings.length} error(s).`,
   };
 }
 
@@ -458,7 +458,7 @@ function failureReport(failures) {
 function writeReport(summary) {
   writeJson(path.join(STATE_DIR, "report.json"), summary);
   const md = [
-    `# InvoiceGuard report — ${summary.passed ? "PASSED" : "FAILED"}`,
+    `# Tickmark report — ${summary.passed ? "PASSED" : "FAILED"}`,
     `${summary.at} · ${summary.results.length} checks · ${summary.credits.toFixed(1)} Kane credits`,
     "",
     ...summary.results.map(({ check, result }) =>
@@ -468,7 +468,7 @@ function writeReport(summary) {
   ].join("\n");
   fs.writeFileSync(path.join(STATE_DIR, "report.md"), md);
   fs.writeFileSync(path.join(STATE_DIR, "report.html"), renderReport({
-    heading: "InvoiceGuard report",
+    heading: "Tickmark report",
     subtitle: `${summary.results.length} checks by Kane CLI · ${new Date(summary.at).toUTCString()}`,
     rows: summary.results.map(({ check, result }) => ({ title: check.title, url: check.url, result })),
   }));
@@ -534,7 +534,7 @@ async function gate(opts = {}) {
   }
 
   const fresh = checks.filter((ch) => !known(ch.id, ch.key)).length;
-  log(bold(`\nInvoiceGuard · verifying with Kane CLI`) + dim(`  ${checks.length} checks, ${fresh} need a fresh run`));
+  log(bold(`\nTickmark · verifying with Kane CLI`) + dim(`  ${checks.length} checks, ${fresh} need a fresh run`));
 
   const results = await pool(checks, cfg.concurrency, async (ch, slot) => {
     let r = known(ch.id, ch.key);
@@ -692,7 +692,7 @@ table{border-collapse:collapse;width:100%} td,th{border-bottom:1px solid #ddd;pa
 }
 
 async function audit(target, opts = {}) {
-  if (!target) throw new Error("usage: invoiceguard audit <url | file.html | file.pdf> [--pack india-gst|us-sales-tax | --rules file.md]");
+  if (!target) throw new Error("usage: tickmark audit <url | file.html | file.pdf> [--pack india-gst|us-sales-tax | --rules file.md]");
   const cfg = loadConfig();
   const docs = await serveDocuments([/^https?:\/\//.test(target) ? { url: target } : { file: target }]);
   let pack;
@@ -705,7 +705,7 @@ async function audit(target, opts = {}) {
   const url = docs.urls[0];
   const visual = docs.visual[0];
   const pdfText = /\.pdf$/i.test(target) && !visual;
-  log(bold(`\nInvoiceGuard audit`) + dim(`  ${target} · ${pack.title} (${pack.rules.length} rules)${visual ? " · visual mode (PDF)" : pdfText ? " · PDF text" : ""}`));
+  log(bold(`\nTickmark audit`) + dim(`  ${target} · ${pack.title} (${pack.rules.length} rules)${visual ? " · visual mode (PDF)" : pdfText ? " · PDF text" : ""}`));
   const check = { id: "audit", title: `Audit of ${path.basename(target)}`, url };
   const r = await verify({ objective: invoiceObjective(pack), url, timeoutSeconds: cfg.timeoutSeconds, visual, allFailures: true, logName: "audit", mathCheck: pack.kind === "invoice", mathRules: pack.mathRules?.length ?? 0 });
   docs.close();
@@ -785,7 +785,7 @@ async function prove(opts = {}) {
 
   const unitN = rows.filter((r) => r.unitCaught).length, kaneN = rows.filter((r) => r.kaneCaught).length;
   const md = [
-    `# InvoiceGuard proof: ${kaneN}/${rows.length} planted bugs caught by Kane CLI, ${unitN}/${rows.length} by unit tests`,
+    `# Tickmark proof: ${kaneN}/${rows.length} planted bugs caught by Kane CLI, ${unitN}/${rows.length} by unit tests`,
     "",
     `${new Date().toISOString()} · clean code afterwards: ${clean.passed ? "all checks green" : "NOT green"}`,
     "",
@@ -813,7 +813,7 @@ function runKaneTestmd(dir, file, timeoutSeconds) {
     args.push(...(chrome ? ["--cdp-endpoint", chrome.endpoint] : ["--headless"]));
     if (process.env.LT_USERNAME && process.env.LT_ACCESS_KEY)
       args.push("--username", process.env.LT_USERNAME, "--access-key", process.env.LT_ACCESS_KEY);
-    const child = spawn("kane-cli", args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, KANE_CLI_USER_AGENT: "invoiceguard" } });
+    const child = spawn("kane-cli", args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, KANE_CLI_USER_AGENT: "tickmark" } });
     let out = "";
     child.stdout.on("data", (d) => { out += d; });
     child.on("close", async (code) => {
@@ -842,7 +842,7 @@ async function graduate(opts = {}) {
   const base = cfg.baseUrl.replace(/\/$/, "");
   let packs = [...new Set(cfg.invoices.map((i) => i.pack))];
   if (opts.pack) packs = packs.filter((p) => p === opts.pack);
-  if (!packs.length) throw new Error("No invoice rulebook to graduate (check --pack and invoiceguard.config.json)");
+  if (!packs.length) throw new Error("No invoice rulebook to graduate (check --pack and tickmark.config.json)");
   for (const pack of packs) {
     const sample = opts.sample ?? cfg.invoices.find((i) => i.pack === pack).path;
     log(bold(`\nGraduating the ${pack} reader`) + dim(`  Kane writes it on ${sample}, then exports it to Playwright`));
@@ -870,7 +870,7 @@ async function graduate(opts = {}) {
       process.exitCode = 1;
     }
   }
-  log(dim("Next: `invoiceguard math` re-adds every sample invoice through these readers, for 0 Kane credits."));
+  log(dim("Next: `tickmark math` re-adds every sample invoice through these readers, for 0 Kane credits."));
 }
 
 /** Read every sample invoice with its graduated reader and check the sums. No Kane credits. */
@@ -879,12 +879,12 @@ async function math({ pack, quiet = false } = {}) {
   await ensureServer(cfg, { quiet });
   const base = cfg.baseUrl.replace(/\/$/, "");
   const invoices = pack ? cfg.invoices.filter((i) => i.pack === pack) : cfg.invoices;
-  if (!quiet) log(bold("\nInvoiceGuard math") + dim("  graduated readers + math check, no Kane credits"));
+  if (!quiet) log(bold("\nTickmark math") + dim("  graduated readers + math check, no Kane credits"));
   let bad = 0;
   for (const inv of invoices) {
     const reader = readerPath(ROOT, inv.pack);
     const name = inv.path.split("/").pop();
-    if (!fs.existsSync(reader)) { bad++; log(`${yellow("?")} ${name}: no graduated ${inv.pack} reader yet (run \`invoiceguard graduate --pack ${inv.pack}\`)`); continue; }
+    if (!fs.existsSync(reader)) { bad++; log(`${yellow("?")} ${name}: no graduated ${inv.pack} reader yet (run \`tickmark graduate --pack ${inv.pack}\`)`); continue; }
     const t = Date.now();
     try {
       const r = checkInvoiceMath(await runReader(reader, base + inv.path));
@@ -904,7 +904,7 @@ async function math({ pack, quiet = false } = {}) {
 async function demo() {
   const patch = path.join("demo", "us-tax-on-subtotal-bug.patch");
   const git = (...a) => spawnSync("git", a, { cwd: ROOT, encoding: "utf8" });
-  if (!fs.existsSync(path.join(ROOT, patch))) throw new Error("Run the demo from a clone of the InvoiceGuard repo");
+  if (!fs.existsSync(path.join(ROOT, patch))) throw new Error("Run the demo from a clone of the Tickmark repo");
   if (git("apply", "--check", patch).status !== 0) throw new Error(`${patch} doesn't apply: is it already applied, or are files modified?`);
   const cfg = loadConfig();
   await ensureServer(cfg, { quiet: true });
@@ -924,7 +924,7 @@ async function demo() {
     const count = (unit.stdout + unit.stderr).match(/Tests\s+(\d+) passed/)?.[1];
     log(unit.status === 0 ? green(`     ✓ all ${count ?? ""} pass`) + dim("  (they test the tax logic, not what the customer sees)") : red("     ✗ unit tests failed"));
 
-    log(bold("\n3/4  InvoiceGuard reads the US invoices in a real browser and re-adds every number"));
+    log(bold("\n3/4  Tickmark reads the US invoices in a real browser and re-adds every number"));
     await math({ pack: "us-sales-tax", quiet: true });
 
     log(bold("\n4/4  Revert the bug"));
@@ -936,7 +936,7 @@ async function demo() {
     process.removeListener("SIGINT", onSignal);
   }
   log(dim("\nThat check ran for free on readers Kane wrote once. With a Kane account, `npm run gate` checks every rule,"));
-  log(dim("and `node cli/invoiceguard.mjs init` makes Claude Code fix bugs like this before it may say \"done\"."));
+  log(dim("and `node cli/tickmark.mjs init` makes Claude Code fix bugs like this before it may say \"done\"."));
 }
 
 /**
@@ -952,10 +952,10 @@ async function hook() {
   const state = readJson(stateFile, { lastGreen: null, attempts: 0 });
   const src = sourceHash(cfg);
 
-  // `invoiceguard prove` is planting bugs on purpose: don't check (or ask the agent to fix) them.
+  // `tickmark prove` is planting bugs on purpose: don't check (or ask the agent to fix) them.
   const lockPid = Number(fs.existsSync(path.join(STATE_DIR, "prove.lock")) && fs.readFileSync(path.join(STATE_DIR, "prove.lock"), "utf8"));
   if (lockPid && (() => { try { process.kill(lockPid, 0); return true; } catch { return false; } })()) {
-    console.log(JSON.stringify({ systemMessage: "InvoiceGuard: `invoiceguard prove` is planting demo bugs right now, so the Kane check is skipped. The planted bugs are reverted automatically." }));
+    console.log(JSON.stringify({ systemMessage: "Tickmark: `tickmark prove` is planting demo bugs right now, so the Kane check is skipped. The planted bugs are reverted automatically." }));
     return;
   }
 
@@ -974,7 +974,7 @@ async function hook() {
   let summary;
   try { summary = await gate(); }
   catch (err) {
-    console.log(JSON.stringify({ systemMessage: `InvoiceGuard could not run Kane: ${err.message}` }));
+    console.log(JSON.stringify({ systemMessage: `Tickmark could not run Kane: ${err.message}` }));
     return;
   }
 
@@ -1011,7 +1011,7 @@ async function hook() {
   console.log(JSON.stringify({
     decision: "block",
     reason: [
-      `InvoiceGuard: Kane CLI opened the app in a real browser and ${failures.length} check(s) failed. You are not done yet.`,
+      `Tickmark: Kane CLI opened the app in a real browser and ${failures.length} check(s) failed. You are not done yet.`,
       "Fix the application code so these invoices are correct (do not weaken the rulebooks in kane/rules/ or the flows), then finish again — Kane will re-verify automatically.",
       `Attempt ${state.attempts} of ${cfg.maxHookAttempts}.`,
       "",
@@ -1023,10 +1023,10 @@ async function hook() {
 function init() {
   const settingsFile = path.join(ROOT, ".claude", "settings.json");
   const settings = readJson(settingsFile, {});
-  const command = "node cli/invoiceguard.mjs hook";
+  const command = "node cli/tickmark.mjs hook";
   settings.hooks ??= {};
   settings.hooks.Stop ??= [];
-  const already = JSON.stringify(settings.hooks.Stop).includes("invoiceguard");
+  const already = JSON.stringify(settings.hooks.Stop).includes("tickmark");
   if (!already) settings.hooks.Stop.push({ hooks: [{ type: "command", command, timeout: 1200 }] });
   writeJson(settingsFile, settings);
   for (const f of ["kane/rules/india-gst.md", "kane/rules/us-sales-tax.md"]) {
@@ -1035,7 +1035,7 @@ function init() {
   }
   log(green("✓ ") + (already ? "Stop hook already installed" : "Installed Claude Code Stop hook") + dim(" (.claude/settings.json)"));
   log(green("✓ ") + "Rulebooks in kane/rules/ (India GST, US sales tax). Edit them in plain English");
-  log(dim("Next: list your invoice pages in invoiceguard.config.json, then `invoiceguard gate`."));
+  log(dim("Next: list your invoice pages in tickmark.config.json, then `tickmark gate`."));
 }
 
 // ------------------------------------------------------------------ exports (used by mcp/server.mjs)
@@ -1078,7 +1078,7 @@ try {
   } else if (cmd === "init") {
     init();
   } else {
-    log(`invoiceguard — invoices (India GST, US sales tax) verified by Kane CLI
+    log(`tickmark — invoices (India GST, US sales tax) verified by Kane CLI
 
   gate [--only <id>] [--no-cache] [--json]   verify this app's invoices and flows
   audit <url|file> [--pack name] [--json]    audit any invoice or contract (html, txt, md, pdf or URL; rulebook auto-detected)
@@ -1091,7 +1091,7 @@ try {
     process.exit(cmd ? 2 : 0);
   }
 } catch (err) {
-  log(red(`invoiceguard: ${err.message}`));
+  log(red(`tickmark: ${err.message}`));
   process.exit(2);
 }
 }

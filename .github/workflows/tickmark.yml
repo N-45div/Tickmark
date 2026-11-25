@@ -1,4 +1,4 @@
-name: InvoiceGuard
+name: Tickmark
 
 # Free on every PR and push to main: unit tests, build, then the graduated readers
 # re-add every sample invoice's numbers in a real browser (no Kane account needed).
@@ -62,13 +62,13 @@ jobs:
         run: npx next start -p 3000 &
       - name: Kane gate
         if: env.LT_USERNAME != '' && env.LT_ACCESS_KEY != ''
-        run: node cli/invoiceguard.mjs gate --no-cache
+        run: node cli/tickmark.mjs gate --no-cache
       - name: Kane report
         if: always() && env.LT_USERNAME != '' && env.LT_ACCESS_KEY != ''
         run: cat .kane/report.md >> "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@v4
         if: always() && env.LT_USERNAME != '' && env.LT_ACCESS_KEY != ''
         with:
-          name: invoiceguard-report
+          name: tickmark-report
           path: .kane/
           include-hidden-files: true

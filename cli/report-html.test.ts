@@ -3,7 +3,7 @@ import { renderReport } from "./report-html.mjs";
 
 describe("renderReport", () => {
   const html = renderReport({
-    heading: "InvoiceGuard audit",
+    heading: "Tickmark audit",
     subtitle: "vendor-invoice.html",
     rows: [
       { title: "Invoice A", url: "http://localhost:3000/a", result: { status: "passed", math: { checked: ["line 1 amount", "total"], findings: [] } } },

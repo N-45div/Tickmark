@@ -1,5 +1,5 @@
 // Graduated invoice reader for the us-sales-tax invoice layout.
-// Written by Kane CLI once (`invoiceguard graduate`), exported to Playwright, cleaned up.
+// Written by Kane CLI once (`tickmark graduate`), exported to Playwright, cleaned up.
 // It only READS the numbers; cli/mathcheck.mjs checks them. Runs offline, no Kane credits.
 // Run: INVOICE_URL=http://localhost:3000/invoice/sample/<id> node <this file>
 import testmu, { resolveVar, setVar } from '@testmuai/playwright-bindings';
@@ -50,7 +50,7 @@ testmu.test("Extract Invoice Data", async (page) => {
   await testmu.step("Report what was read", async () => {
     const read = {};
     for (const k of ["line_items","subtotal","tax_lines","round_off","total","amount_in_words"]) read[k] = await resolveVar(`{{${k}}}`);
-    console.log("INVOICEGUARD_READ " + JSON.stringify(read));
+    console.log("TICKMARK_READ " + JSON.stringify(read));
   });
 });
 

@@ -1,22 +1,22 @@
 {
-  "name": "invoiceguard",
+  "name": "tickmark",
   "version": "0.1.0",
   "private": true,
   "description": "Invoices that can't go out wrong (India GST, US sales tax), verified in a real browser by Kane CLI.",
   "bin": {
-    "invoiceguard": "./cli/invoiceguard.mjs"
+    "tickmark": "./cli/tickmark.mjs"
   },
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
     "test": "vitest run",
-    "gate": "node cli/invoiceguard.mjs gate",
-    "audit": "node cli/invoiceguard.mjs audit",
-    "prove": "node cli/invoiceguard.mjs prove",
-    "math": "node cli/invoiceguard.mjs math",
-    "graduate": "node cli/invoiceguard.mjs graduate",
-    "demo": "node cli/invoiceguard.mjs demo"
+    "gate": "node cli/tickmark.mjs gate",
+    "audit": "node cli/tickmark.mjs audit",
+    "prove": "node cli/tickmark.mjs prove",
+    "math": "node cli/tickmark.mjs math",
+    "graduate": "node cli/tickmark.mjs graduate",
+    "demo": "node cli/tickmark.mjs demo"
   },
   "license": "MIT",
   "dependencies": {

@@ -11,7 +11,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const MARKER = "INVOICEGUARD_READ ";
+const MARKER = "TICKMARK_READ ";
 const FIELDS = ["line_items", "subtotal", "tax_lines", "round_off", "total", "amount_in_words"];
 
 /**
@@ -54,7 +54,7 @@ export function sanitizeExport(code, { name, recordedUrl }) {
 
   const header = [
     `// Graduated invoice reader for the ${name} invoice layout.`,
-    "// Written by Kane CLI once (`invoiceguard graduate`), exported to Playwright, cleaned up.",
+    "// Written by Kane CLI once (`tickmark graduate`), exported to Playwright, cleaned up.",
     "// It only READS the numbers; cli/mathcheck.mjs checks them. Runs offline, no Kane credits.",
     "// Run: INVOICE_URL=http://localhost:3000/invoice/sample/<id> node <this file>",
     "",
@@ -93,7 +93,7 @@ export const readerPath = (root, pack) => path.join(root, "kane", "graduated", `
  * `runKaneTestmd(dir, file)` runs `kane-cli testmd run` in `dir` and resolves when done.
  */
 export async function graduate({ root, pack, url, objective, runKaneTestmd, exportTestmd, validate }) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `invoiceguard-graduate-${pack}-`));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `tickmark-graduate-${pack}-`));
   try {
     const file = `${pack}-read_test.md`;
     fs.writeFileSync(path.join(dir, file),
