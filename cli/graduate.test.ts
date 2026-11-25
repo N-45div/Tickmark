@@ -68,12 +68,22 @@ describe("repointPinnedText", () => {
   it("points a value Kane found by its visible text at the field's test id", () => {
     const out = repointPinnedText(step("due_date", 'internal:text="-12-2026 (Net 30)"i'));
     expect(out).toContain('locators: ["internal:testid=[data-testid=\\"due-date\\"s]"]');
+    expect(out).toContain("els[0].innerText.trim()");
     expect(out).not.toContain("Net 30");
   });
 
-  it("leaves test-id locators and fields without a known test id alone", () => {
-    const byTestId = step("due_date", 'internal:testid=[data-testid="due-date"s]');
-    expect(repointPinnedText(byTestId)).toBe(byTestId);
+  it("also re-points a value Kane found by the amount it saw", () => {
+    const out = repointPinnedText(step("subtotal", 'internal:role=cell[name="$3,325.00"i]'));
+    expect(out).toContain('data-testid=\\"subtotal\\"');
+    expect(out).not.toContain("3,325.00");
+  });
+
+  it("reads a field found by its own test id as printed, and leaves other stable locators alone", () => {
+    const own = repointPinnedText(step("payment_terms", 'internal:testid=[data-testid="payment-terms"s]'));
+    expect(own).toContain("els[0].innerText.trim()");
+    expect(own).toContain('locators: ["internal:testid=[data-testid=\\"payment-terms\\"s]"], query');
+    const other = step("subtotal", 'internal:testid=[data-testid="taxable-total"s]');
+    expect(repointPinnedText(other)).toBe(other);
     const unknown = step("line_items", 'internal:text="Web design"i');
     expect(repointPinnedText(unknown)).toBe(unknown);
   });
