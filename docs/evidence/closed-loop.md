@@ -1,5 +1,8 @@
 # Evidence: Claude Code ⇄ Kane CLI closed loop
 
+> Recorded before the project was renamed from InvoiceGuard to Tickmark, so the output below says
+> InvoiceGuard and `cli/invoiceguard.mjs`. It is kept exactly as recorded.
+
 Recorded on **19 Nov 2026** in a real, headless Claude Code session (`claude -p`) working on this repo,
 with the project's Stop hook (`.claude/settings.json` → `node cli/invoiceguard.mjs hook`) active.
 Nothing was simulated: the hook ran Kane CLI against the live app in Chrome, and Kane's report was

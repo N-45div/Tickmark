@@ -1,5 +1,8 @@
 # InvoiceGuard proof: 5/5 planted bugs caught by Kane CLI, 2/5 by unit tests
 
+> Recorded before the project was renamed from InvoiceGuard to Tickmark, so its heading says
+> InvoiceGuard. It is kept exactly as recorded.
+
 2026-11-25T03:34:36.294Z · clean code afterwards: all checks green
 
 | Planted bug | Where | Unit tests | Kane CLI | What Kane reported |
