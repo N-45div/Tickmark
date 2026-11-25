@@ -21,17 +21,31 @@ const FIELDS = ["line_items", "subtotal", "tax_lines", "round_off", "total", "am
  *  - read the invoice URL from INVOICE_URL instead of the recorded one,
  *  - print what was read on one line, for runReader().
  */
-// Fields with a stable data-testid on the page. Kane sometimes finds a value by the text it saw
-// ("-12-2026 (Net 30)"), which only works on invoices that happen to print the same text.
-const FIELD_TESTIDS = { invoice_date: "invoice-date", due_date: "due-date", payment_terms: "payment-terms", round_off: "round-off", total: "grand-total" };
+// Fields with their own data-testid on the page. Kane sometimes finds a value by the text or the
+// amount it saw ("-12-2026 (Net 30)", a cell named "$3,325.00"), which only works on invoices that
+// happen to print the same thing, and sometimes parses it in ways that miss other wordings.
+const FIELD_TESTIDS = {
+  invoice_date: "invoice-date", due_date: "due-date", payment_terms: "payment-terms",
+  subtotal: "subtotal", round_off: "round-off", total: "grand-total",
+};
+const READ_TEXT = JSON.stringify("(els) => (els[0] ? els[0].innerText.trim() : 'none')");
 
-/** Point a step that finds its value by visible text at the field's data-testid instead. */
+/**
+ * A step that reads a field with its own data-testid but found it some other way: point it at the
+ * test id and return the element's text as printed. Parsing is the math check's job.
+ */
 export function repointPinnedText(block) {
   const field = block.match(/setVar\("(\w+)"/)?.[1];
   const testid = FIELD_TESTIDS[field];
-  if (!testid) return block;
-  return block.replace(/locators: \[([^\]]*)\]/, (all, list) =>
-    /internal:text=/.test(list) ? `locators: [${JSON.stringify(`internal:testid=[data-testid="${testid}"s]`)}]` : all);
+  // A JSON array of strings; the strings themselves can contain "]".
+  const LOCATORS = /locators: \[((?:\s*"(?:[^"\\]|\\.)*"\s*,?)*)\]/;
+  const locators = block.match(LOCATORS)?.[1];
+  if (!testid || locators === undefined) return block;
+  const own = locators.includes(`data-testid=\\"${testid}\\"`);
+  if (/internal:testid=/.test(locators) && !own) return block; // another stable element: leave it
+  return block
+    .replace(LOCATORS, () => `locators: [${JSON.stringify(`internal:testid=[data-testid="${testid}"s]`)}]`)
+    .replace(/wrappedJs: "(?:[^"\\]|\\.)*"/, () => `wrappedJs: ${READ_TEXT}`);
 }
 
 export function sanitizeExport(code, { name, recordedUrl }) {
