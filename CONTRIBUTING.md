@@ -1,4 +1,4 @@
-# Contributing to InvoiceGuard
+# Contributing to Tickmark
 
 Thanks for helping make invoices harder to get wrong. The most valuable contribution is a
 **rulebook for your country or tax regime**: you know the rules, Kane CLI does the checking.
@@ -39,10 +39,10 @@ what the invoice actually shows, and rules tagged `[math]` are checked in code i
    - Tag arithmetic with `[math]`. Kane reads very well and adds up badly; code does the sums.
    - Cite the official source for each rule in your pull request description.
 
-2. **Register it** in `invoiceguard.config.json` under `rulePacks`.
+2. **Register it** in `tickmark.config.json` under `rulePacks`.
 
 3. **Add sample invoices** that should pass: a fixture in `lib/fixtures.ts`, rendered at
-   `/invoice/sample/<id>`, listed in `invoiceguard.config.json` under `invoices` with your rulebook.
+   `/invoice/sample/<id>`, listed in `tickmark.config.json` under `invoices` with your rulebook.
 
 4. **Check it:** `npm run gate` should pass for your samples. Then plant a realistic mistake (e.g. the
    wrong VAT rate) and make sure Kane catches it. A short note of what you tried helps reviewers.

@@ -1,8 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Renamed from **InvoiceGuard** to **Tickmark**, after the mark an auditor puts beside every figure
+  they have checked. The CLI is now `tickmark`, the config `tickmark.config.json`, the MCP server
+  `tickmark` and the slash command `/tickmark`. Drafts saved in the browser under the old name still load.
+
 ## v0.1.0: first release
 
-**InvoiceGuard: your AI coding agent can't say "done" until a real browser says the invoice is right.**
+**InvoiceGuard (now Tickmark): your AI coding agent can't say "done" until a real browser says the invoice is right.**
 
 ### Invoices
 - Invoice maker with a live preview for **India (GST)**: IGST vs CGST/SGST/UTGST, GSTIN checksum and

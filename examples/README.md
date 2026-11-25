@@ -1,6 +1,6 @@
 # Example documents
 
-Realistic documents with **planted mistakes**, used to show what InvoiceGuard + Kane CLI catch.
+Realistic documents with **planted mistakes**, used to show what Tickmark + Kane CLI catch.
 The answer key lives here, not inside the files, so Kane has nothing to read but the document itself.
 
 | File | Rulebook (auto-detected) | Planted mistakes |

@@ -1,4 +1,4 @@
-# InvoiceGuard — notes for coding agents
+# Tickmark — notes for coding agents
 
 This is an invoice maker for India (GST) and the United States (sales tax), built with Next.js and
 TypeScript.
@@ -19,10 +19,10 @@ TypeScript.
   check itself is ambiguous), you may reword that rule or flow so it is clearer, but it must still
   require the same thing.
 - `.kane/report.md` has the latest results and links to the Kane recordings.
-- The `invoiceguard` MCP server (`mcp/server.mjs`, registered in `.mcp.json`) exposes `check_document`,
+- The `tickmark` MCP server (`mcp/server.mjs`, registered in `.mcp.json`) exposes `check_document`,
   `check_invoice_against_contract`, `list_rulebooks` and `verify_project`. `verify_project` is the
   same gate as `npm run gate`.
-- Rulebooks turn into one `Assert that …` per rule (`ruleAssertions` in `cli/invoiceguard.mjs`). Write
+- Rulebooks turn into one `Assert that …` per rule (`ruleAssertions` in `cli/tickmark.mjs`). Write
   each rule as one checkable statement about visible text.
 
 ## US sales tax facts the code relies on

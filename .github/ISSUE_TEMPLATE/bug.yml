@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in InvoiceGuard doesn't work as expected
+description: Something in Tickmark doesn't work as expected
 labels: ["bug"]
 body:
   - type: textarea
