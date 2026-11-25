@@ -297,6 +297,17 @@ with no human in between.
 The gate starts your dev server if it isn't running. Reports go to `.kane/report.md` and
 `.kane/report.json`. Each check links to its Kane recording in TestMu Test Manager.
 
+## Roadmap
+
+- **npm package:** `npx invoiceguard init` in any project, `npx invoiceguard audit invoice.pdf` anywhere.
+- **More rulebooks:** EU VAT (incl. reverse charge), UK VAT, Australia and New Zealand GST, Canada GST/HST,
+  and e-invoicing fields (EN 16931 / Peppol, ZUGFeRD / Factur-X). Contributions welcome.
+- **GitHub Action:** run the gate on pull requests and comment Kane's verdict, plus a scheduled check of a
+  live site.
+- **Kane gate for any app:** the Stop hook, cache, triage and reader graduation, packaged for apps that
+  aren't invoices.
+- **More graduated readers** for common invoice layouts, so the math check is free for more documents.
+
 ## Contributing
 
 The best contribution is a **rulebook for your country**: plain-English rules in a Markdown file,
