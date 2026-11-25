@@ -1,11 +1,11 @@
-// Drive the InvoiceGuard MCP server like an agent would: list tools, list
+// Drive the Tickmark MCP server like an agent would: list tools, list
 // rulebooks, then (optionally) run real Kane checks in parallel.
 //   node scripts/mcp-smoke.mjs           # tools + rulebooks only (no Kane credits)
 //   node scripts/mcp-smoke.mjs --kane    # also runs check_document + check_invoice_against_contract
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-const client = new Client({ name: "invoiceguard-smoke", version: "0.0.1" });
+const client = new Client({ name: "tickmark-smoke", version: "0.0.1" });
 await client.connect(new StdioClientTransport({ command: "node", args: ["mcp/server.mjs"], stderr: "inherit" }));
 
 const { tools } = await client.listTools();

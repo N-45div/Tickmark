@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// InvoiceGuard MCP server: lets any MCP-capable agent (Claude Code, Claude
+// Tickmark MCP server: lets any MCP-capable agent (Claude Code, Claude
 // Desktop, Cursor, Windsurf, Codex…) check invoices and contracts with Kane CLI.
 // Kane opens each document in a real Chrome, checks it against a plain-English
 // rulebook, and the verdict (broken rules, evidence, suggested fix, recording)
@@ -21,10 +21,10 @@ const cfg = loadConfig();
 const PACKS = Object.keys(cfg.rulePacks);
 
 const server = new McpServer(
-  { name: "invoiceguard", version: "0.2.0" },
+  { name: "tickmark", version: "0.2.0" },
   {
     instructions: [
-      "InvoiceGuard checks invoices and contracts with Kane CLI, which reads each document in a real browser.",
+      "Tickmark checks invoices and contracts with Kane CLI, which reads each document in a real browser.",
       "Use check_document for one invoice or contract, check_invoice_against_contract to confirm an invoice bills what a contract agreed,",
       "and verify_project to re-verify this app after you change its code. Each Kane run takes about 1-3 minutes.",
       "Results are not legal or tax advice; surface them to the user as findings to review.",
@@ -112,13 +112,13 @@ function toMarkdown(title, s) {
 }
 
 const ok = (markdown, structured) => ({ content: [{ type: "text", text: markdown }], structuredContent: structured });
-const fail = (err) => ({ isError: true, content: [{ type: "text", text: `InvoiceGuard: ${err.message ?? err}` }] });
+const fail = (err) => ({ isError: true, content: [{ type: "text", text: `Tickmark: ${err.message ?? err}` }] });
 
 // ------------------------------------------------------------------ tools
 
 server.registerTool("list_rulebooks", {
   title: "List rulebooks",
-  description: "List the plain-English rulebooks InvoiceGuard can check documents against (e.g. India GST invoices, US sales tax invoices, services contracts), with every rule.",
+  description: "List the plain-English rulebooks Tickmark can check documents against (e.g. India GST invoices, US sales tax invoices, services contracts), with every rule.",
   inputSchema: {},
   annotations: { readOnlyHint: true },
 }, async () => {
@@ -202,7 +202,7 @@ server.registerTool("check_invoice_against_contract", {
 server.registerTool("verify_project", {
   title: "Verify this app with Kane",
   description: [
-    "Run InvoiceGuard's Kane gate on this project: every sample invoice and user flow listed in tickmark.config.json",
+    "Run Tickmark's Kane gate on this project: every sample invoice and user flow listed in tickmark.config.json",
     "is opened in a real browser and checked against its rulebook. Use it after changing invoice code; if it fails,",
     "fix the application code (never weaken the rulebooks) and run it again. Unchanged invoices are skipped.",
   ].join(" "),
@@ -234,4 +234,4 @@ server.registerTool("verify_project", {
 });
 
 await server.connect(new StdioServerTransport());
-console.error("invoiceguard MCP server ready (stdio)");
+console.error("tickmark MCP server ready (stdio)");

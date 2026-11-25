@@ -1,17 +1,17 @@
 ---
-description: Check invoices and contracts with Kane CLI, or verify this app (InvoiceGuard)
+description: Check invoices and contracts with Kane CLI, or verify this app (Tickmark)
 argument-hint: check <file|url> | match <invoice> <contract> | verify | math | rules
 ---
 
-You are running InvoiceGuard for the user. Arguments: `$ARGUMENTS`
+You are running Tickmark for the user. Arguments: `$ARGUMENTS`
 
 Pick the action from the first word of the arguments, then report the result in plain language:
 what passed, what failed, the evidence, the suggested fix and the Kane recording link.
 Results are findings for the user to review, not legal or tax advice.
 
-- `check <file or url>` → call the `check_document` tool of the `invoiceguard` MCP server with
+- `check <file or url>` → call the `check_document` tool of the `tickmark` MCP server with
   `file` (a local path) or `url`. The rulebook (India GST, US sales tax or services contract) is
-  detected automatically. Arithmetic errors come from InvoiceGuard's math check; say so.
+  detected automatically. Arithmetic errors come from Tickmark's math check; say so.
 - `match <invoice> <contract>` → call `check_invoice_against_contract` with both documents.
 - `verify` → call `verify_project` (the same as `npm run gate`). If a check **failed**, read Kane's
   bug report, fix the application code (never weaken `kane/rules/` or `kane/flows/`), and run

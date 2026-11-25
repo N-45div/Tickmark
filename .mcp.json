@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "invoiceguard": {
+    "tickmark": {
       "command": "node",
       "args": ["mcp/server.mjs"]
     }
