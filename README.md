@@ -1,6 +1,6 @@
-# InvoiceGuard
+# Tickmark
 
-[![InvoiceGuard CI](https://github.com/N-45div/kanehack/actions/workflows/invoiceguard.yml/badge.svg)](https://github.com/N-45div/kanehack/actions/workflows/invoiceguard.yml)
+[![Tickmark CI](https://github.com/N-45div/kanehack/actions/workflows/tickmark.yml/badge.svg)](https://github.com/N-45div/kanehack/actions/workflows/tickmark.yml)
 
 **Your AI coding agent can't say "done" until a real browser says the invoice is right.**
 
@@ -54,12 +54,12 @@ Over-collecting annoys customers. Under-collecting becomes your own liability at
 | **Invoice app** (`app/`, `lib/gst.ts`, `lib/us.ts`) | Next.js editor with a live preview and an India / US switch. **India:** IGST vs CGST/SGST/UTGST, GSTIN checksum + state-code validation, HSN/SAC, round-off, amount in words (lakh/crore), financial-year numbering. **US:** nexus states, per-line taxable flag, exemption certificates, no-sales-tax states, state base rates as a starting point. |
 | **Rulebooks** (`kane/rules/`) | `india-gst.md`: 13 rules based on the mandatory contents of a tax invoice ([CGST Rules, rule 46](https://cbic-gst.gov.in/)). `us-sales-tax.md`: 10 rules for nexus, taxability, exemptions and math. Plain English, editable by anyone. Add a rulebook for your own country. |
 | **User flows** (`kane/flows/*.md`) | Plain-English journeys through the editor, e.g. "bill a Mumbai client and expect IGST 18%" or "tax only the taxable line for a Texas customer". |
-| **`invoiceguard gate`** | Kane opens every sample invoice and flow in an isolated headless Chrome (in parallel) and checks them. |
-| **`invoiceguard hook`** | Claude Code **Stop hook**. If the app changed, Kane re-verifies; failures come back to Claude as a block with Kane's bug title, root cause, evidence and suggested fix. |
-| **`invoiceguard audit <url\|file>`** | Audit *any* invoice you receive, from a link, an HTML or Markdown file, or a PDF. It works out whether the invoice is Indian or American and uses the matching rulebook. |
+| **`tickmark gate`** | Kane opens every sample invoice and flow in an isolated headless Chrome (in parallel) and checks them. |
+| **`tickmark hook`** | Claude Code **Stop hook**. If the app changed, Kane re-verifies; failures come back to Claude as a block with Kane's bug title, root cause, evidence and suggested fix. |
+| **`tickmark audit <url\|file>`** | Audit *any* invoice you receive, from a link, an HTML or Markdown file, or a PDF. It works out whether the invoice is Indian or American and uses the matching rulebook. |
 | **MCP server** (`mcp/server.mjs`) | Any MCP agent (Claude Code, Claude Desktop, Cursor, Windsurf, Codex) can call `check_document`, `check_invoice_against_contract`, `list_rulebooks` and `verify_project`. Kane's verdict comes straight back to the agent. |
 | **Contract rulebooks** (`kane/rules/services-contract.md`, `invoice-vs-contract.md`) | 12 checks for missing or contradictory terms in a services agreement (fee in words vs figures, payment terms, termination, IP, governing law, signatures). 5 checks that an invoice bills what the contract says (client, rates, terms, dates, currency). |
-| **CI** (`.github/workflows/invoiceguard.yml`) | The same gate on every push and PR. |
+| **CI** (`.github/workflows/tickmark.yml`) | The same gate on every push and PR. |
 
 ## Kane reads, code does the math
 
@@ -97,11 +97,11 @@ you can open, screenshot or attach to a PR. This is the real audit of `examples/
 
 ### Graduated readers: the math check for zero credits
 
-Kane can export a test it has written as plain Playwright code. `invoiceguard graduate` uses that:
+Kane can export a test it has written as plain Playwright code. `tickmark graduate` uses that:
 
 1. Kane writes a reading test once for each invoice layout (about 25 credits).
 2. Kane exports it to Playwright.
-3. InvoiceGuard cleans it up: it keeps only the reads, drops Kane's own self-checks and any account
+3. Tickmark cleans it up: it keeps only the reads, drops Kane's own self-checks and any account
    ids, and takes the invoice URL as a parameter.
 4. The reader is installed only if it reads **every** known-good sample invoice of that layout
    correctly. Kane's generated selectors sometimes pin the values it saw while writing the test, and a
@@ -138,7 +138,7 @@ Exporting to Playwright, and checking the numbers in code, turned out to be the 
  you: "add X to the invoice editor"
         │
         ▼
- Claude Code edits app/ ──► tries to finish ──► Stop hook: invoiceguard hook
+ Claude Code edits app/ ──► tries to finish ──► Stop hook: tickmark hook
         ▲                                             │
         │                                    Kane CLI × N (real Chrome, parallel)
         │                                             │
@@ -167,7 +167,7 @@ Cursor: `.cursor/mcp.json`):
 ```json
 {
   "mcpServers": {
-    "invoiceguard": {
+    "tickmark": {
       "command": "node",
       "args": ["/absolute/path/to/kanehack/mcp/server.mjs"],
       "env": { "LT_USERNAME": "your-testmu-username", "LT_ACCESS_KEY": "your-testmu-access-key" }
@@ -224,13 +224,13 @@ npm run prove                                         # plant 5 bugs, scorecard 
 npm run graduate                                      # re-write the readers after a layout change
 ```
 
-In Claude Code, `/invoiceguard check <file>`, `/invoiceguard match <invoice> <contract>`,
-`/invoiceguard verify` and `/invoiceguard math` drive the same checks through the MCP server.
+In Claude Code, `/tickmark check <file>`, `/tickmark match <invoice> <contract>`,
+`/tickmark verify` and `/tickmark math` drive the same checks through the MCP server.
 
 To get the agent loop in Claude Code:
 
 ```bash
-node cli/invoiceguard.mjs init          # adds the Stop hook to .claude/settings.json
+node cli/tickmark.mjs init          # adds the Stop hook to .claude/settings.json
 claude                                  # work as usual; Kane signs off before Claude stops
 ```
 
@@ -275,7 +275,7 @@ with no human in between.
 
 ## Configuration
 
-`invoiceguard.config.json`:
+`tickmark.config.json`:
 
 ```json
 {
@@ -301,7 +301,7 @@ The gate starts your dev server if it isn't running. Reports go to `.kane/report
 
 ## Roadmap
 
-- **npm package:** `npx invoiceguard init` in any project, `npx invoiceguard audit invoice.pdf` anywhere.
+- **npm package:** `npx tickmark init` in any project, `npx tickmark audit invoice.pdf` anywhere.
 - **More rulebooks:** EU VAT (incl. reverse charge), UK VAT, Australia and New Zealand GST, Canada GST/HST,
   and e-invoicing fields (EN 16931 / Peppol, ZUGFeRD / Factur-X). Contributions welcome.
 - **GitHub Action:** run the gate on pull requests and comment Kane's verdict, plus a scheduled check of a
@@ -319,14 +319,14 @@ checked by Kane CLI. [CONTRIBUTING.md](CONTRIBUTING.md) walks through it, and th
 ## Security
 
 Documents you check are opened in a browser that Kane CLI records (screenshots, page text) in your
-TestMu account, so InvoiceGuard is careful about what it shows it:
+TestMu account, so Tickmark is careful about what it shows it:
 
 - Only invoice and contract formats are checked (`.html`, `.md`, `.txt`, `.pdf`, up to 10 MB).
 - When an **AI agent** picks the document (MCP tools), the file must be inside the project folder,
   symlinks included, so a manipulated agent can't send `~/.ssh` or other private files. URLs must be
   `http(s)`, and cloud metadata addresses are refused.
 - Results tell the agent that text quoted from a document is data to review, never instructions.
-- Credentials stay with `kane-cli login` or `LT_USERNAME` / `LT_ACCESS_KEY`; InvoiceGuard never stores them.
+- Credentials stay with `kane-cli login` or `LT_USERNAME` / `LT_ACCESS_KEY`; Tickmark never stores them.
 
 ## Disclaimer
 
