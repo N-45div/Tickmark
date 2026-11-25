@@ -255,11 +255,16 @@ const EXTRACTION_OBJECTIVE = [
   "Assert that line_items, subtotal, tax_lines and total have been stored.",
 ].join("\n");
 
+/** Checks a graduated reader must make on every sample invoice (each sample shows a due date and terms). */
+const READER_MUST_CHECK = ["subtotal", "total", "due date vs payment terms"];
+
 /** Extra guidance when Kane writes a reader that must work on every invoice of a layout. */
 const GRADUATION_HINTS = [
   "These steps will be reused on other invoices with the same layout but different numbers, items and tax rows.",
   "So locate values by stable attributes such as data-testid, read every row of a table rather than specific rows,",
   "and never locate anything by the text or numbers you see on this particular invoice.",
+  "On this app the values carry these data-testid attributes: items (the line items table), taxable-total or subtotal,",
+  "tax-line (each tax row), round-off, grand-total, amount-in-words, invoice-date, due-date and payment-terms.",
 ].join(" ");
 
 function invoiceObjective(pack) {
@@ -859,7 +864,11 @@ async function graduate(opts = {}) {
         for (const inv of samples) {
           try {
             const r = checkInvoiceMath(await runReader(file, base + inv.path));
+            // A reader that silently reads less than it should would make the math check skip sums,
+            // so it must make every one of these checks on every known-good sample.
+            const missed = READER_MUST_CHECK.filter((c) => !r.checked.includes(c));
             if (r.findings.length || r.skipped) problems.push(`${inv.path}: ${r.findings[0] ?? r.skipped}`);
+            else if (missed.length) problems.push(`${inv.path}: did not read enough to check the ${missed.join(", ")}`);
           } catch (err) { problems.push(`${inv.path}: ${err.message}`); }
         }
         return problems;
