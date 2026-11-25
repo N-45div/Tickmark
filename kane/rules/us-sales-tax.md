@@ -17,3 +17,4 @@ arithmetic: Tickmark re-adds the numbers in code instead of asking Kane to do su
 8. Either the words "Tax exempt" do not appear anywhere on the invoice, or they are followed by an exemption or resale certificate number and the sales tax is $0.00. (Zero tax because of no nexus or a state without sales tax is not a tax exemption.)
 9. When the invoice says the seller does not collect sales tax in the customer's state (no nexus), the sales tax is $0.00. This rule is satisfied when the invoice says no such thing.
 10. The total due equals the subtotal plus the sales tax to within $0.01. [math]
+11. If the invoice gives a payment period in days (for example "Net 30" beside the due date), the due date shown is exactly that many days after the issue date. This rule is satisfied when no payment period in days is stated. [math]
