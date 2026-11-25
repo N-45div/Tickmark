@@ -250,6 +250,8 @@ const EXTRACTION_OBJECTIVE = [
   "Store the round off amount as 'round_off' (store the word none if it is not shown).",
   "Store the grand total or total due as 'total'.",
   "Store the amount in words as 'amount_in_words' (store the word none if it is not shown).",
+  "Store the invoice date as 'invoice_date' and the due date as 'due_date', exactly as printed (store the word none for a date that is not shown).",
+  "Store as 'payment_terms' the words that say when payment is due, such as 'Net 30' beside the due date or 'Payment due within 7 days' in the terms or notes (store the word none if there are none).",
   "Assert that line_items, subtotal, tax_lines and total have been stored.",
 ].join("\n");
 
