@@ -57,12 +57,78 @@ export function parseList(value) {
   try { const v = JSON.parse(value); return Array.isArray(v) ? v : []; } catch { return null; }
 }
 
+const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+const dayNumber = (y, m, d) => {
+  const t = Date.UTC(y, m - 1, d);
+  const back = new Date(t);
+  return back.getUTCFullYear() === y && back.getUTCMonth() === m - 1 && back.getUTCDate() === d ? t / 864e5 : null;
+};
+
 /**
- * Check an invoice's arithmetic from the values Kane extracted.
- * @param {object} x  { line_items, subtotal, tax_lines, round_off, total, amount_in_words }
+ * Every day a printed date could mean, as UTC day numbers. "25 Nov 2026", "Nov 25, 2026" and
+ * "2026-11-25" have one meaning; "03/12/2026" has two (India writes day first, the US month first).
+ */
+export function parseDateCandidates(value) {
+  const s = String(value ?? "").trim().toLowerCase().replace(/(\d)(st|nd|rd|th)\b/g, "$1");
+  if (!s || s === "none") return [];
+  let m = s.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if (m) return [dayNumber(+m[1], +m[2], +m[3])].filter((d) => d !== null);
+  m = s.match(/\b(\d{1,2})[\s-]+([a-z]{3})[a-z]*\.?[\s,-]+(\d{4})\b/);
+  if (m && MONTHS[m[2]]) return [dayNumber(+m[3], MONTHS[m[2]], +m[1])].filter((d) => d !== null);
+  m = s.match(/\b([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b/);
+  if (m && MONTHS[m[1]]) return [dayNumber(+m[3], MONTHS[m[1]], +m[2])].filter((d) => d !== null);
+  m = s.match(/\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\b/);
+  if (m) return [...new Set([dayNumber(+m[3], +m[2], +m[1]), dayNumber(+m[3], +m[1], +m[2])])].filter((d) => d !== null);
+  return [];
+}
+
+/** The payment period stated in words such as "Net 30" or "payment due within 7 days", in days. */
+export function parsePaymentDays(value) {
+  const s = String(value ?? "").toLowerCase();
+  if (!s.trim() || s.trim() === "none") return null;
+  if (/due (up)?on receipt/.test(s)) return 0;
+  const m = s.match(/\bnet\s*-?\s*(\d{1,3})\b/) ?? s.match(/\bwithin\s+(\d{1,3})\s*days?\b/) ??
+    (/(pay|due)/.test(s) ? s.match(/\b(\d{1,3})\s*days?\b/) : null);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Does the due date agree with the payment period the invoice states? Kane only reads the dates
+ * and the terms; the days are counted here. Reports a contradiction only when no reading of the
+ * dates fits, so an ambiguous date never produces a false alarm. Returns null when not checkable.
+ */
+export function checkPaymentTerms(x = {}) {
+  const days = parsePaymentDays(x.payment_terms);
+  const issued = parseDateCandidates(x.invoice_date);
+  const due = parseDateCandidates(x.due_date);
+  if (days === null || !issued.length || !due.length) return null;
+  const gaps = issued.flatMap((a) => due.map((b) => Math.round(b - a)));
+  if (gaps.includes(days)) return { check: "due date vs payment terms" };
+  return {
+    check: "due date vs payment terms",
+    finding: `Payment terms say "${String(x.payment_terms).trim()}" (${days} days) but the due date ${String(x.due_date).trim()} is ${gaps[0]} days after the invoice date ${String(x.invoice_date).trim()}`,
+  };
+}
+
+/**
+ * Check an invoice's arithmetic from the values Kane extracted: the sums, and the due date
+ * against the stated payment period.
+ * @param {object} x  { line_items, subtotal, tax_lines, round_off, total, amount_in_words,
+ *                      invoice_date, due_date, payment_terms }
  * @returns {{ checked: string[], findings: string[], skipped?: string }}
  */
 export function checkInvoiceMath(x = {}) {
+  const result = checkSums(x);
+  const terms = checkPaymentTerms(x);
+  if (!terms) return result;
+  return {
+    ...result,
+    checked: [...result.checked, terms.check],
+    findings: terms.finding ? [...result.findings, terms.finding] : result.findings,
+  };
+}
+
+function checkSums(x) {
   const items = parseList(x.line_items);
   const taxLines = parseList(x.tax_lines);
   if (items === null || taxLines === null) return { checked: [], findings: [], skipped: "Kane's extracted values could not be parsed" };
