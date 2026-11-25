@@ -1,7 +1,8 @@
-name: InvoiceGuard (Kane CLI)
+name: InvoiceGuard
 
-# Every push and PR: unit tests, then Kane CLI opens each sample invoice in a
-# real Chrome and checks it against kane/rules.md. A wrong invoice fails the build.
+# Free on every PR and push to main: unit tests, build, then the graduated readers
+# re-add every sample invoice's numbers in a real browser (no Kane account needed).
+# With LT_USERNAME / LT_ACCESS_KEY repo secrets, Kane CLI also checks every rule.
 on:
   push:
     branches: [main]
@@ -9,9 +10,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  verify:
+  checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,19 +24,50 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - run: npm install -g @testmuai/kane-cli
+      - name: Browser for the graduated readers
+        run: npx playwright install --with-deps chromium
       - name: Start the app
         run: npx next start -p 3000 &
+      - name: Math check (graduated readers, 0 Kane credits)
+        run: npm run math
+
+  kane:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      LT_USERNAME: ${{ secrets.LT_USERNAME }}
+      LT_ACCESS_KEY: ${{ secrets.LT_ACCESS_KEY }}
+    steps:
+      - name: Skip without Kane credentials
+        if: env.LT_USERNAME == '' || env.LT_ACCESS_KEY == ''
+        run: echo "No LT_USERNAME / LT_ACCESS_KEY secrets, so the Kane gate is skipped." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v4
+        if: env.LT_USERNAME != '' && env.LT_ACCESS_KEY != ''
+      - uses: actions/setup-node@v4
+        if: env.LT_USERNAME != '' && env.LT_ACCESS_KEY != ''
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        if: env.LT_USERNAME != '' && env.LT_ACCESS_KEY != ''
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm install -g @testmuai/kane-cli
+          npm run build
+      - name: Start the app
+        if: env.LT_USERNAME != '' && env.LT_ACCESS_KEY != ''
+        run: npx next start -p 3000 &
       - name: Kane gate
-        env:
-          LT_USERNAME: ${{ secrets.LT_USERNAME }}
-          LT_ACCESS_KEY: ${{ secrets.LT_ACCESS_KEY }}
+        if: env.LT_USERNAME != '' && env.LT_ACCESS_KEY != ''
         run: node cli/invoiceguard.mjs gate --no-cache
       - name: Kane report
-        if: always()
+        if: always() && env.LT_USERNAME != '' && env.LT_ACCESS_KEY != ''
         run: cat .kane/report.md >> "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && env.LT_USERNAME != '' && env.LT_ACCESS_KEY != ''
         with:
           name: invoiceguard-report
           path: .kane/
