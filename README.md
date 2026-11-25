@@ -1,16 +1,19 @@
-# Tickmark
+# ✓ Tickmark
 
 [![Tickmark CI](https://github.com/N-45div/kanehack/actions/workflows/tickmark.yml/badge.svg)](https://github.com/N-45div/kanehack/actions/workflows/tickmark.yml)
 
-**Your AI coding agent can't say "done" until a real browser says the invoice is right.**
+**Every invoice read the way your client reads it, before it goes out.**
 
-Tax rules written in plain English, checked by [Kane CLI](https://github.com/LambdaTest/kane-cli) in Chrome,
-with the bug report going straight back to Claude Code, which fixes it. India GST and US sales tax built in,
-contracts too.
+A tickmark is what an auditor puts beside every figure they have checked. Tickmark does that for
+invoices: tax rules written in plain English, [Kane CLI](https://github.com/LambdaTest/kane-cli) reading
+each invoice in a real browser, code re-adding every number Kane reads, and Claude Code not allowed to say
+"done" until all of it passes. India GST and US sales tax built in, contracts too.
 
-- 🧾 **Rules anyone can read and edit:** `kane/rules/*.md`. Add your country in a pull request.
-- 🛑 **A Stop hook for Claude Code:** Kane blocks the agent with the bug, the evidence and a fix until it's right.
-- ➗ **Kane reads, code does the math:** and the reader graduates to free, offline Playwright.
+| | |
+| --- | --- |
+| **Unit tests caught 2 of 5 planted tax bugs. Kane CLI caught 5 of 5.** Three of them live in what the customer sees, not in the tax logic. | [proof](docs/evidence/prove.md) |
+| **Pointed at a 531★ open-source GST app we didn't write,** Tickmark confirmed its GST logic and caught its default invoice contradicting itself: "payment due within 7 days" above a due date 15 days out. | [in the wild](docs/evidence/real-world.md) |
+| **Kane reads, code does the math.** Kane is unreliable at arithmetic, so it only reads; code re-adds every sum and counts every due date. Kane's reader is exported to Playwright, so that check costs 0 credits. | [how](#kane-reads-code-does-the-math) |
 
 **Try it in 15 seconds, no account:** `npm install && npx playwright install chromium && npm run demo`
 
@@ -19,10 +22,21 @@ contracts too.
 <sub>Excerpt from a real session, shown as a terminal: full transcript in
 [docs/evidence/closed-loop.md](docs/evidence/closed-loop.md).</sub>
 
-**Live app:** https://invoiceguard-delta.vercel.app · **Kane caught 5/5 planted bugs, unit tests 2/5**
-([proof](docs/evidence/prove.md)) · **every check recorded** ([recordings](docs/evidence/recordings.md))
+**Live app:** https://invoiceguard-delta.vercel.app · **every Kane check recorded** ([recordings](docs/evidence/recordings.md))
 
 > Built for the [KaneCLI Hackathon](https://www.kaneclihack.sh/) · agent: Claude Code · verifier: Kane CLI
+
+## For judges: one link per criterion
+
+| Criterion | Where to see it |
+| --- | --- |
+| **Works end to end** | The [live app](https://invoiceguard-delta.vercel.app); `npm run demo` (no account, 15 s); `npm run gate` (Kane checks every sample invoice and flow) |
+| **Kane caught or proved something real** | [An audit of a real invoice from a 531★ open-source GST app](docs/evidence/real-world.md), including what Kane missed · [5/5 planted bugs vs 2/5 for unit tests](docs/evidence/prove.md) |
+| **The agent and Kane talk to each other** | [A real Claude Code transcript](docs/evidence/closed-loop.md): the Stop hook blocks Claude with Kane's bug report, Claude fixes the code, Kane re-checks, Claude may finish |
+| **Verified, not vibes** | One `Assert that …` per rule; arithmetic and dates checked in code, not by the model ([why](#kane-reads-code-does-the-math)); readers installed only if they read every known-good sample; [recordings](docs/evidence/recordings.md) of every check |
+| **Closed loop** | [The loop](#the-closed-loop): blocks only on real product bugs, reports bad checks as *inconclusive*, gives up after 3 tries |
+| **Ships** | CLI, Claude Code Stop hook, [MCP server](#mcp-server-use-it-from-any-agent) for any agent, green CI, MIT, [contributing guide](CONTRIBUTING.md) |
+| **Honest about limits** | [What Kane and Tickmark get wrong](#honest-limits) |
 
 | India · GST | United States · sales tax |
 | --- | --- |
@@ -52,7 +66,7 @@ Over-collecting annoys customers. Under-collecting becomes your own liability at
 | Piece | What it does |
 | --- | --- |
 | **Invoice app** (`app/`, `lib/gst.ts`, `lib/us.ts`) | Next.js editor with a live preview and an India / US switch. **India:** IGST vs CGST/SGST/UTGST, GSTIN checksum + state-code validation, HSN/SAC, round-off, amount in words (lakh/crore), financial-year numbering. **US:** nexus states, per-line taxable flag, exemption certificates, no-sales-tax states, state base rates as a starting point. |
-| **Rulebooks** (`kane/rules/`) | `india-gst.md`: 13 rules based on the mandatory contents of a tax invoice ([CGST Rules, rule 46](https://cbic-gst.gov.in/)). `us-sales-tax.md`: 10 rules for nexus, taxability, exemptions and math. Plain English, editable by anyone. Add a rulebook for your own country. |
+| **Rulebooks** (`kane/rules/`) | `india-gst.md`: 14 rules based on the mandatory contents of a tax invoice ([CGST Rules, rule 46](https://cbic-gst.gov.in/)). `us-sales-tax.md`: 11 rules for nexus, taxability, exemptions, math and payment terms. Plain English, editable by anyone. Add a rulebook for your own country. |
 | **User flows** (`kane/flows/*.md`) | Plain-English journeys through the editor, e.g. "bill a Mumbai client and expect IGST 18%" or "tax only the taxable line for a Texas customer". |
 | **`tickmark gate`** | Kane opens every sample invoice and flow in an isolated headless Chrome (in parallel) and checks them. |
 | **`tickmark hook`** | Claude Code **Stop hook**. If the app changed, Kane re-verifies; failures come back to Claude as a block with Kane's bug title, root cause, evidence and suggested fix. |
@@ -64,12 +78,13 @@ Over-collecting annoys customers. Under-collecting becomes your own liability at
 ## Kane reads, code does the math
 
 Kane is excellent at **reading** an invoice and unreliable at **arithmetic**. In testing it passed
-"each amount equals quantity × rate" on a line showing 12 × $45.00 = $450.00. So every invoice check
+"each amount equals quantity × rate" on a line showing 12 × $45.00 = $450.00, and on a real invoice it
+passed "payment due within 7 days" next to a due date 15 days out. So every invoice check
 runs two Kane passes in parallel:
 
 1. **The rules pass.** Kane checks the plain-English rulebook, one `Assert that …` per rule.
-2. **The reading pass.** Kane only copies the numbers off the page: line items, rates, taxable flags,
-   tax lines, round off, total and amount in words.
+2. **The reading pass.** Kane only copies values off the page: line items, rates, taxable flags,
+   tax lines, round off, total, amount in words, the invoice and due dates, and the payment terms.
 
 `cli/mathcheck.mjs` then re-adds those numbers in plain code:
 
@@ -77,7 +92,9 @@ runs two Kane passes in parallel:
 - subtotal = the sum of the lines,
 - US tax = rate × the *taxable* lines; India tax = each line × its GST rate,
 - total = subtotal + tax + round off,
-- the amount in words matches the total (lakh/crore and thousand/million).
+- the amount in words matches the total (lakh/crore and thousand/million),
+- the due date is as many days after the invoice date as the payment terms say ("Net 30", "within 7 days").
+  Numeric dates like 03/12/2026 can be read two ways, so a contradiction is reported only when no reading fits.
 
 An arithmetic error fails the check with the exact numbers, even when Kane's own assertions passed:
 
@@ -102,10 +119,13 @@ Kane can export a test it has written as plain Playwright code. `tickmark gradua
 1. Kane writes a reading test once for each invoice layout (about 25 credits).
 2. Kane exports it to Playwright.
 3. Tickmark cleans it up: it keeps only the reads, drops Kane's own self-checks and any account
-   ids, and takes the invoice URL as a parameter.
-4. The reader is installed only if it reads **every** known-good sample invoice of that layout
-   correctly. Kane's generated selectors sometimes pin the values it saw while writing the test, and a
-   reader like that would report bugs that don't exist.
+   ids, and takes the invoice URL as a parameter. Kane sometimes finds a value by what it saw on that one
+   invoice (a cell named "$3,325.00", the text "-12-2026 (Net 30)"), even when told the page's test ids;
+   for fields with their own `data-testid`, the cleanup points the step at the test id and returns the
+   text as printed, and the math check does the parsing.
+4. The reader is installed only if, on **every** known-good sample invoice of that layout, it finds no
+   errors and reads enough to check the subtotal, the total and the due date. A reader that silently
+   reads less would make the math check skip sums, so it is refused.
 
 From then on, `npm run math` reads every sample invoice in about a second each, **offline and for zero
 Kane credits**, and the math check re-adds the numbers. The gate uses the graduated readers too. If one
@@ -273,6 +293,24 @@ of a real Claude Code session. Claude was asked to apply the "teammate refactor"
 hook blocked it with Kane's report, Claude fixed the bug, and the hook let it finish, in 4 minutes
 with no human in between.
 
+## In the wild: a real open-source GST app
+
+We pointed Tickmark at [Free GST Billing Software](https://github.com/IamRamgarhia/Free-GST-Billing-Software)
+(531★, MIT, v1.10.86), an app we didn't write, with a fictional business, and audited a PDF it exported.
+Its GST logic held up: IGST for an inter-state supply, matching GSTINs, correct lakh amounts in words,
+every sum right. The audit still found:
+
+- **A contradiction:** the default freelancer terms say "payment due within 7 days" on an invoice whose
+  default due date is 15 days out. Kane read the dates and terms; code counted the days.
+- **One to review:** no signatory line unless a signature image is uploaded (CGST rule 46(q)).
+
+We also found a bug Kane did **not** confirm: a whole-bill discount typed for one client shows up on the
+next client's new invoice. A script reproduces it every time and the code explains it, but our Kane flow for
+it passed twice, taking a different path through the app. The write-up says exactly that.
+
+It also exposed two mistakes of ours, both fixed: rules that assumed our own invoice layout, and a date rule
+Kane couldn't count. [Full write-up, code references and how to reproduce it](docs/evidence/real-world.md).
+
 ## Configuration
 
 `tickmark.config.json`:
@@ -298,6 +336,27 @@ with no human in between.
 
 The gate starts your dev server if it isn't running. Reports go to `.kane/report.md` and
 `.kane/report.json`. Each check links to its Kane recording in TestMu Test Manager.
+
+## Honest limits
+
+- **Kane can't be trusted with arithmetic or dates.** It passed 12 × $45 = $450, and a 15-day due date
+  under "payment due within 7 days". Every such rule is tagged `[math]` and checked in code instead.
+- **Rules can carry hidden assumptions.** Ours first expected state codes "in brackets", like our own
+  invoices print them, and failed a correct invoice from another app. They're worded for any layout now.
+- **Rule 11 doesn't model after-GST (cash) discounts.** "Total = taxable value + tax + round off" flags them.
+- **Kane's exported readers pin what they saw.** Even when told the test ids, Kane located some values
+  by the text or amount on the invoice it learned from. Our cleanup re-points those steps, and the strict
+  install check refused two readers that would have skipped sums.
+- **Free, offline reading is only for our own layouts.** Any other invoice gets a Kane reading pass
+  (about 20 credits) before the math check.
+- **Kane is not instant.** A check takes 1–3 minutes; the cache skips unchanged invoices, and the Stop hook
+  does nothing if the app didn't change.
+- **Kane's replay didn't help us.** Replayed checks repeated the reasoning recorded on a clean invoice and
+  passed a planted bug ([details](#what-we-tried-kane-testmd-replay)).
+- **A Kane flow can take its own path.** On the open-source app, Kane passed a flow that a script fails
+  every time: it clicked Save twice and re-entered a value, and missed the bug. Flows that must hit an
+  exact sequence need to spell it out.
+- **Not tax or legal advice.** See the [disclaimer](#disclaimer).
 
 ## Roadmap
 
