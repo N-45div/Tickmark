@@ -5,6 +5,16 @@
 - Renamed from **InvoiceGuard** to **Tickmark**, after the mark an auditor puts beside every figure
   they have checked. The CLI is now `tickmark`, the config `tickmark.config.json`, the MCP server
   `tickmark` and the slash command `/tickmark`. Drafts saved in the browser under the old name still load.
+- **In the wild:** an audit of a real invoice from Free GST Billing Software (531★), an open-source app
+  we didn't write. Its GST logic was right; its default terms contradict its default due date.
+  [docs/evidence/real-world.md](docs/evidence/real-world.md), including what Kane missed.
+- **Payment terms rule** (India rule 14, US rule 11): the due date must match "Net 30" or "within 7 days".
+  Kane reads the dates and terms; `mathcheck` counts the days, and only reports a contradiction when no
+  reading of an ambiguous date like 03/12/2026 fits.
+- India rules 7–9 are worded for any invoice layout, not only ours (same requirements).
+- **Graduated readers** read the dates too. Steps Kane pinned to the text or amount it saw are pointed at
+  the field's `data-testid`, and a reader is installed only if it checks the subtotal, total and due date on
+  every sample.
 
 ## v0.1.0: first release
 
