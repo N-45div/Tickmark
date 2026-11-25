@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit: free-gst-billing-interstate.pdf</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1d1d1f;--muted:#6b6b70;--line:#e3e0d8;--ok:#1f7a52;--bad:#b42318;--warn:#a15c00}
+@media (prefers-color-scheme:dark){:root{--bg:#141517;--card:#1f2023;--ink:#ececec;--muted:#a0a0a6;--line:#34353a;--ok:#4cc38a;--bad:#ff6b5e;--warn:#f5b453}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:32px 16px 64px}h1{font-size:24px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 20px}
+.verdict{display:inline-block;font-weight:700;padding:6px 14px;border-radius:999px;margin-bottom:20px;border:2px solid currentColor}
+.verdict.ok{color:var(--ok)}.verdict.bad{color:var(--bad)}.verdict.warn{color:var(--warn)}
+ul.checks{list-style:none;padding:0;margin:0;display:grid;gap:12px}
+.check{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:10px;padding:14px 16px}
+.check.ok{border-left-color:var(--ok)}.check.bad{border-left-color:var(--bad)}.check.warn{border-left-color:var(--warn)}
+.head{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.title{font-weight:600}.meta{color:var(--muted);font-size:13px;margin-left:auto}
+.pill{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.ok .pill{color:var(--ok)}.bad .pill{color:var(--bad)}.warn .pill{color:var(--warn)}
+.check p{margin:8px 0 0}.bug{font-weight:600}.label{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.note{color:var(--muted);font-style:italic}.check ul{margin:4px 0 0;padding-left:20px}.links{font-size:13px;color:var(--muted)}
+a{color:inherit}code{font:12px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+footer{margin-top:28px;color:var(--muted);font-size:13px}
+</style></head><body><main>
+<h1>Audit: free-gst-billing-interstate.pdf</h1>
+<p class="sub">India: GST invoice rules · 14 rules · checked by Kane CLI · Wed, 25 Nov 2026 16:12:38 GMT</p>
+<div class="verdict bad">1 of 1 failed</div>
+<ul class="checks">
+<li class="check bad">
+  <div class="head"><span class="pill">✗ Failed</span><span class="title">free-gst-billing-interstate.pdf</span><span class="meta">112s</span></div>
+  <p class="bug">Generated tax invoice omits authorised signatory line</p>
+  <p>The generated invoice document is missing the required authorised signatory line at its end.</p>
+  <p class="label">Arithmetic, re-added in code</p><ul><li>Payment terms say &quot;Payment due within 7 days of invoice via UPI/NEFT/IMPS.&quot; (7 days) but the due date 10 Dec 2026 is 15 days after the invoice date 25 Nov 2026</li></ul>
+  <p class="label">Rules not met</p><ul><li>&quot;Reverse charge&quot; is stated, and the invoice ends with an authorised signatory li</li></ul>
+  <p><span class="label">Suggested fix</span> Update the invoice template to add an authorised signatory line at the end of every generated tax invoice, then verify the completed PDF output.</p>
+  <p class="links"><a href="https://test-manager.lambdatest.com/projects/01M7PH5DV3VEKD8RMCCWKTVV9A/test-cases/01M89QJN7KQDDQ788NN5F4HKND/dashboard/share/US_TX2H7QIL72VBLTBV6Q7W9NGF41Y4UVFVHD7BOKSMZNDV9O1Q10LPV8IJ5H40FWG6?type=summary&amp;agentView=true&amp;fqdn=summary-page">Kane recording</a></p>
+</li>
+</ul>
+<footer>Checked by <a href="https://github.com/LambdaTest/kane-cli">Kane CLI</a> in a real browser, with every number re-added in code by Tickmark. Findings to review, not tax or legal advice.</footer>
+</main></body></html>
