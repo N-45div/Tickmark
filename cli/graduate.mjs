@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 
 const MARKER = "TICKMARK_READ ";
-const FIELDS = ["line_items", "subtotal", "tax_lines", "round_off", "total", "amount_in_words"];
+const FIELDS = ["line_items", "subtotal", "tax_lines", "round_off", "total", "amount_in_words", "invoice_date", "due_date", "payment_terms"];
 
 /**
  * Turn Kane's Playwright export into a reusable reader:
